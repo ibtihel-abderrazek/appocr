@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<OcrConfiguration version="1.0" created="2025-09-14T14:37:28.269Z">
+    <Profile name="Nouveau Profil">
+        <Settings>
+            <OcrMode>true</OcrMode>
+            <Language>fra</Language>
+            <NamingPattern>$(DD)-$(MM)-$(YYYY)-$(n)</NamingPattern>
+            <PdfMode>pdfa</PdfMode>
+        </Settings>
+        <PatchSettings>
+            <PatchMode>false</PatchMode>
+            <PatchNaming>barcode_ocr_generic</PatchNaming>
+        </PatchSettings>
+        <Advanced>
+            <AutoDetectLanguage>false</AutoDetectLanguage>
+            <EnablePreprocessing>true</EnablePreprocessing>
+            <OutputQuality>high</OutputQuality>
+        </Advanced>
+    </Profile>
+    <Metadata>
+        <Created>2025-09-14T14:37:28.269Z</Created>
+        <LastModified>2025-09-14T14:37:28.269Z</LastModified>
+        <Application>ScannerProfileManager</Application>
+        <Version>1.0</Version>
+        <Generator>wiem</Generator>
+    </Metadata>
+</OcrConfiguration>

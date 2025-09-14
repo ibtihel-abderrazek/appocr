@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner Profile Manager</title>
+    <link rel="stylesheet" href="/style/css.css">
+    
+    <!-- Styles supplémentaires pour le constructeur de nommage -->
+    <style>
+        /* Styles pour le constructeur de modèle de nommage */
+        .naming-pattern-builder {
+            background: var(--gray-50);
+            border: 1px solid var(--gray-200);
+            border-radius: var(--border-radius-lg);
+            padding: var(--spacing-xl);
+            margin-top: var(--spacing-lg);
+        }
+        
+        .pattern-input-container {
+            position: relative;
+            margin-bottom: var(--spacing-lg);
+        }
+        
+        .pattern-input {
+            width: 100%;
+            padding: 12px 50px 12px 16px;
+            border: 2px solid var(--gray-200);
+            border-radius: var(--border-radius-lg);
+            font-size: var(--font-size-sm);
+            font-family: monospace;
+            transition: all 0.3s ease;
+            background: white;
+        }
+        
+        .pattern-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .clear-pattern-btn {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: var(--danger-color);
+            border: none;
+            color: white;
+            font-size: 14px;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .clear-pattern-btn:hover {
+            background: #dc2626;
+            transform: translateY(-50%) scale(1.1);
+        }
+        
+        .pattern-preview {
+            margin-bottom: var(--spacing-lg);
+            padding: var(--spacing-md);
+            background: #e3f2fd;
+            border-radius: var(--border-radius);
+            border-left: 4px solid var(--info-color);
+            font-size: var(--font-size-sm);
+            color: #1565c0;
+        }
+        
+        .pattern-preview strong {
+            color: #0d47a1;
+        }
+        
+        .substitutions-section {
+            background: white;
+            border: 1px solid var(--gray-200);
+            border-radius: var(--border-radius-lg);
+            padding: var(--spacing-lg);
+            margin-bottom: var(--spacing-lg);
+        }
+        
+        .section-title {
+            font-size: var(--font-size-base);
+            font-weight: 600;
+            color: var(--gray-700);
+            margin-bottom: var(--spacing-md);
+            border-bottom: 2px solid var(--gray-200);
+            padding-bottom: var(--spacing-xs);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+        }
+        
+        .substitution-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: var(--spacing-xs);
+            margin-bottom: var(--spacing-md);
+        }
+        
+        .substitution-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            background: var(--gray-50);
+            border: 1px solid var(--gray-200);
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: var(--font-size-sm);
+        }
+        
+        .substitution-item:hover {
+            background: #e3f2fd;
+            border-color: var(--info-color);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .substitution-code {
+            background: var(--gray-200);
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 11px;
+            min-width: 65px;
+            text-align: center;
+            margin-right: 10px;
+            font-weight: 600;
+        }
+        
+        .substitution-desc {
+            flex: 1;
+            font-size: 12px;
+            color: var(--gray-600);
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: var(--spacing-sm);
+            margin-bottom: var(--spacing-md);
+            flex-wrap: wrap;
+        }
+        
+        .action-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        
+        .btn-separator {
+            background: var(--gray-500);
+            color: white;
+        }
+        
+        .btn-separator:hover {
+            background: var(--gray-600);
+        }
+        
+        .examples-section {
+            background: #fff8e1;
+            border: 1px solid #ffcc02;
+            border-radius: var(--border-radius);
+            padding: var(--spacing-md);
+        }
+        
+        .examples-title {
+            font-weight: 600;
+            color: #e65100;
+            margin-bottom: var(--spacing-sm);
+            font-size: 13px;
+        }
+        
+        .example-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 10px;
+            margin: 4px 0;
+            background: white;
+            border: 1px solid #ffcc02;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-size: 11px;
+        }
+        
+        .example-item:hover {
+            background-color: #fff3e0;
+        }
+        
+        .example-pattern {
+            font-family: monospace;
+            color: #e65100;
+            font-weight: 600;
+        }
+        
+        .example-result {
+            font-family: monospace;
+            color: #bf360c;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Gestionnaire de profils de scanner</h1>
+        </div>
+
+        <div class="controls">
+            <button id="btnRefresh" class="btn-primary" aria-label="Actualiser la liste des profils">🔄 Actualiser</button>
+            <button id="btnAddProfile" class="btn-success" aria-label="Créer un nouveau profil">➕ Nouveau profil</button>
+            <button id="btnDetails" class="btn-primary" disabled aria-label="Voir les détails du profil sélectionné">👁 Détails</button>
+            <button id="btnEdit" class="btn-warning" disabled aria-label="Modifier le profil sélectionné">✏️ Modifier</button>
+            <button id="btnDelete" class="btn-danger" disabled aria-label="Supprimer le profil sélectionné">🗑 Supprimer</button>
+            <button id="btnScan" class="btn-primary" disabled aria-label="Scanner avec le profil sélectionné">📄 Scanner</button>
+        </div>
+    
+        <div id="scannersGrid" class="scanners-grid" role="grid">
+            <p class="loading-message">Chargement des profils...</p>
+        </div>
+
+        <!-- Zone d'importation -->
+        <div class="import-zone" id="importZone" role="region" aria-label="Zone d'importation de fichiers">
+            <p>📂 Glissez-déposez un fichier ici ou utilisez les boutons ci-dessous</p>
+            <input type="file" id="fileInput" hidden accept=".pdf,.jpg,.jpeg,.png,.tiff,.tif">
+            <div class="import-buttons">
+                <button id="btnOCR" class="btn-success" disabled aria-label="Lancer le traitement OCR">🔎 OCR</button>
+                <button id="btnPatch" class="btn-warning" disabled aria-label="Traitement Patch">📋 Patch</button>
+                <button id="btnGeneratePatch" class="btn-info" aria-label="Générer un patch">🏷️ Générer Patch</button>
+                <button id="btnImportFile" class="btn-primary" aria-label="Importer un fichier">📂 Importer un fichier</button>
+            </div>
+            <div id="importedFileName" class="file-info" aria-live="polite"></div>
+        </div>
+    </div>
+
+    <!-- Popup OCR amélioré avec constructeur intégré -->
+    <div id="ocrPopup" class="popup" role="dialog" aria-labelledby="ocr-title" aria-hidden="true">
+        <div class="popup-content">
+            <div class="popup-header">
+                <h3 id="ocr-title">OCR - Reconnaissance de texte</h3>
+                <button onclick="closeOCRPopup()" class="close-btn" aria-label="Fermer">×</button>
+            </div>
+            <div class="popup-body">
+                <form id="ocrForm" enctype="multipart/form-data">
+                    <input type="hidden" name="ocrMode" value="true">
+                    
+                    <div class="form-group">
+                        <label for="ocrLang">Langue de reconnaissance :</label>
+                        <select name="lang" id="ocrLang">
+                            <option value="">🌐 Détection automatique</option>
+                            <option value="ara">🇸🇦 العربية (Arabe)</option>
+                            <option value="fra" selected>🇫🇷 Français</option>
+                            <option value="eng">🇺🇸 English (Anglais)</option>
+                        </select>
+                        <small>Choisissez la langue du document ou laissez en détection automatique</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ocrNamingPattern">Modèle de nommage automatique :</label>
+                        
+                        <div class="naming-pattern-builder">
+                            <div class="pattern-input-container">
+                                <input type="text" name="namingPattern" id="ocrNamingPattern" class="pattern-input" value="$(YYYY)$(MM)$(DD)" placeholder="Cliquez sur les éléments ci-dessous pour construire votre modèle...">
+                                <button type="button" class="clear-pattern-btn" onclick="clearOCRPattern()" title="Effacer tout">🗑</button>
+                            </div>
+                            
+                            <div class="pattern-preview">
+                                <strong>Aperçu :</strong> <span id="ocrPreview">20250914</span>
+                            </div>
+                            
+                            <div class="substitutions-section">
+                                <div class="section-title">📅 Date et Heure</div>
+                                <div class="substitution-grid">
+                                    <div class="substitution-item" onclick="addToOCRPattern('$(YYYY)')">
+                                        <div class="substitution-code">$(YYYY)</div>
+                                        <div class="substitution-desc">Année complète</div>
+                                    </div>
+                                    <div class="substitution-item" onclick="addToOCRPattern('$(YY)')">
+                                        <div class="substitution-code">$(YY)</div>
+                                        <div class="substitution-desc">Année (00-99)</div>
+                                    </div>
+                                    <div class="substitution-item" onclick="addToOCRPattern('$(MM)')">
+                                        <div class="substitution-code">$(MM)</div>
+                                        <div class="substitution-desc">Mois (01-12)</div>
+                                    </div>
+                                    <div class="substitution-item" onclick="addToOCRPattern('$(DD)')">
+                                        <div class="substitution-code">$(DD)</div>
+                                        <div class="substitution-desc">Jour (01-31)</div>
+                                    </div>
+                                    <div class="substitution-item" onclick="addToOCRPattern('$(HH)')">
+                                        <div class="substitution-code">$(HH)</div>
+                                        <div class="substitution-desc">Heure (00-23)</div>
+                                    </div>
+                                    <div class="substitution-item" onclick="addToOCRPattern('$(mm)')">
+                                        <div class="substitution-code">$(mm)</div>
+                                        <div class="substitution-desc">Minute (00-59)</div>
+                                    </div>
+                                    <div class="substitution-item" onclick="addToOCRPattern('$(ss)')">
+                                        <div class="substitution-code">$(ss)</div>
+                                        <div class="substitution-desc">Seconde (00-59)</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="section-title">🔢 Numéros</div>
+                                <div class="substitution-grid">
+                                    <div class="substitution-item" onclick="addToOCRPattern('$(nnn)')">
+                                        <div class="substitution-code">$(nnn)</div>
+                                        <div class="substitution-desc">Numéro 3 chiffres (ex: 001)</div>
+                                    </div>
+                                    <div class="substitution-item" onclick="addToOCRPattern('$(nn)')">
+                                        <div class="substitution-code">$(nn)</div>
+                                        <div class="substitution-desc">Numéro 2 chiffres (ex: 01)</div>
+                                    </div>
+                                    <div class="substitution-item" onclick="addToOCRPattern('$(n)')">
+                                        <div class="substitution-code">$(n)</div>
+                                        <div class="substitution-desc">Numéro 1 chiffre (ex: 1)</div>
+                                    </div>
+                                </div>
+                                
+                            </div>
+                            
+                            <div class="examples-section">
+                                <div class="examples-title">💡 Modèles couramment utilisés :</div>
+                                
+                                <div class="example-item" onclick="setOCRPattern('$(YYYY)-$(MM)-$(DD)')">
+                                    <span class="example-pattern">$(YYYY)-$(MM)-$(DD)</span>
+                                    <span class="example-result">→ 2025-09-14</span>
+                                </div>
+                                
+                                <div class="example-item" onclick="setOCRPattern('$(DD)-$(MM)-$(YYYY)')">
+                                    <span class="example-pattern">$(DD)-$(MM)-$(YYYY)</span>
+                                    <span class="example-result">→ 14-09-2025</span>
+                                </div>
+                                
+                                <div class="example-item" onclick="setOCRPattern('$(YYYY)$(MM)$(DD)_$(nnnn)')">
+                                    <span class="example-pattern">$(YYYY)$(MM)$(DD)_$(nnnn)</span>
+                                    <span class="example-result">→ 20250914_0001</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <small>Le fichier sera automatiquement nommé selon le modèle construit ci-dessus.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ocrPdfMode">Format de sortie :</label>
+                        <select name="mode" id="ocrPdfMode">
+                            <option value="pdfa" selected>📚 PDF/A (Recommandé - Archivage long terme)</option>
+                            <option value="pdf">📄 PDF Standard</option>
+                        </select>
+                        <small>PDF/A est recommandé pour l'archivage et la compatibilité maximale</small>
+                    </div>
+
+                    <div class="popup-buttons">
+                        <button type="button" onclick="closeOCRPopup()">Annuler</button>
+                        <button type="submit" class="btn-primary">🚀 Lancer la reconnaissance OCR</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Popup Patch amélioré avec constructeur intégré -->
+    <div id="patchPopup" class="popup" role="dialog" aria-labelledby="patch-title" aria-hidden="true">
+        <div class="popup-content">
+            <div class="popup-header">
+                <h3 id="patch-title">Traitement par lots (Patch)</h3>
+                <button onclick="closePatchPopup()" class="close-btn" aria-label="Fermer">×</button>
+            </div>
+            <div class="popup-body">
+                <form id="patchForm" enctype="multipart/form-data">
+                    <input type="hidden" name="containsPatch" value="true">
+
+                    <div class="form-group">
+                        <label for="patchMode">Mode de traitement :</label>
+                        <select name="patchMode" id="patchMode">
+                            <option value="T_classique" selected>⚡ Traitement classique (Standard)</option>
+                            <option value="T_with_bookmarks">🔖 Traitement avec signets automatiques</option>
+                        </select>
+                        <small>Le mode avec signets ajoute des marque-pages automatiques dans les PDFs générés</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="patchNaming">Stratégie de nommage des fichiers :</label>
+                        <select name="naming" id="patchNaming">
+                            <option value="barcode_ocr_generic" selected>🎯 Code-barres → OCR → Générique (Recommandé)</option>
+                            <option value="barcode">📊 Code-barres uniquement</option>
+                            <option value="ocr">🔤 OCR de texte uniquement</option>
+                            <option value="generic">📝 Nommage générique simple</option>
+                        </select>
+                        <small>Le système essaiera d'abord les codes-barres, puis l'OCR, puis un nom générique</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ocrNamingPattern">Modèle de nommage automatique :</label>
+                        
+                        <div class="naming-pattern-builder">
+                            <div class="pattern-input-container">
+                                <input type="text" name="namingPattern" id="ocrNamingPattern" class="pattern-input" value="$(YYYY)$(MM)$(DD)" placeholder="Cliquez sur les éléments ci-dessous pour construire votre modèle...">
+                                <button type="button" class="clear-pattern-btn" onclick="clearOCRPattern()" title="Effacer tout">🗑</button>
+                            </div>
+                            
+                            <div class="pattern-preview">
+                                <strong>Aperçu :</strong> <span id="ocrPreview">20250914</span>
+                            </div>
+                            
+                            <div class="substitutions-section">
+                                <div class="section-title">📅 Date et Heure</div>
+                                <div class="substitution-grid">
+                                    <div class="substitution-item" onclick="addToOCRPattern('$(YYYY)')">
+                                        <div class="substitution-code">$(YYYY)</div>
+                                        <div class="substitution-desc">Année complète</div>
+                                    </div>
+                                    <div class="substitution-item" onclick="addToOCRPattern('$(YY)')">
+                                        <div class="substitution-code">$(YY)</div>
+                                        <div class="substitution-desc">Année (00-99)</div>
+                                    </div>
+                                    <div class="substitution-item" onclick="addToOCRPattern('$(MM)')">
+                                        <div class="substitution-code">$(MM)</div>
+                                        <div class="substitution-desc">Mois (01-12)</div>
+                                    </div>
+                                    <div class="substitution-item" onclick="addToOCRPattern('$(DD)')">
+                                        <div class="substitution-code">$(DD)</div>
+                                        <div class="substitution-desc">Jour (01-31)</div>
+                                    </div>
+                                    <div class="substitution-item" onclick="addToOCRPattern('$(HH)')">
+                                        <div class="substitution-code">$(HH)</div>
+                                        <div class="substitution-desc">Heure (00-23)</div>
+                                    </div>
+                                    <div class="substitution-item" onclick="addToOCRPattern('$(mm)')">
+                                        <div class="substitution-code">$(mm)</div>
+                                        <div class="substitution-desc">Minute (00-59)</div>
+                                    </div>
+                                    <div class="substitution-item" onclick="addToOCRPattern('$(ss)')">
+                                        <div class="substitution-code">$(ss)</div>
+                                        <div class="substitution-desc">Seconde (00-59)</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="section-title">🔢 Numéros</div>
+                                <div class="substitution-grid">
+                                    <div class="substitution-item" onclick="addToOCRPattern('$(nnn)')">
+                                        <div class="substitution-code">$(nnn)</div>
+                                        <div class="substitution-desc">Numéro 3 chiffres (ex: 001)</div>
+                                    </div>
+                                    <div class="substitution-item" onclick="addToOCRPattern('$(nn)')">
+                                        <div class="substitution-code">$(nn)</div>
+                                        <div class="substitution-desc">Numéro 2 chiffres (ex: 01)</div>
+                                    </div>
+                                    <div class="substitution-item" onclick="addToOCRPattern('$(n)')">
+                                        <div class="substitution-code">$(n)</div>
+                                        <div class="substitution-desc">Numéro 1 chiffre (ex: 1)</div>
+                                    </div>
+                                </div>
+                                
+                            </div>
+                            
+                            <div class="examples-section">
+                                <div class="examples-title">💡 Modèles couramment utilisés :</div>
+                                
+                                <div class="example-item" onclick="setOCRPattern('$(YYYY)-$(MM)-$(DD)')">
+                                    <span class="example-pattern">$(YYYY)-$(MM)-$(DD)</span>
+                                    <span class="example-result">→ 2025-09-14</span>
+                                </div>
+                                
+                                <div class="example-item" onclick="setOCRPattern('$(DD)-$(MM)-$(YYYY)')">
+                                    <span class="example-pattern">$(DD)-$(MM)-$(YYYY)</span>
+                                    <span class="example-result">→ 14-09-2025</span>
+                                </div>
+                                
+                                <div class="example-item" onclick="setOCRPattern('$(YYYY)$(MM)$(DD)_$(nnnn)')">
+                                    <span class="example-pattern">$(YYYY)$(MM)$(DD)_$(nnnn)</span>
+                                    <span class="example-result">→ 20250914_0001</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <small>Le fichier sera automatiquement nommé selon le modèle construit ci-dessus.</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="ocrMode">Mode OCR :</label>
+                        <select name="ocrMode" id="ocrMode">
+                            <option value="false">📄 Document sans OCR</option>
+                            <option value="true" selected>📑 Document avec OCR</option>
+                        </select>
+                        <small>Choisissez si le document contient des pages de séparation pour diviser en plusieurs fichiers</small>
+                    </div>
+                    
+                    <div class="popup-buttons">
+                        <button type="button" onclick="closePatchPopup()">Annuler</button>
+                        <button type="submit" class="btn-primary">🔧 Traiter le document par lots</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Autres popups inchangées -->
+    <!-- Popup Générer Patch amélioré (inchangé) -->
+    <div id="generatePatchPopup" class="popup" role="dialog" aria-labelledby="generate-patch-title" aria-hidden="true">
+        <div class="popup-content">
+            <div class="popup-header">
+                <h3 id="generate-patch-title">Générer un séparateur de document</h3>
+                <button onclick="closeGeneratePatchPopup()" class="close-btn" aria-label="Fermer">×</button>
+            </div>
+            <div class="popup-body">
+                <form id="generatePatchForm">
+                    <div class="form-group">
+                         <input type="hidden" name="generatePatch"  value="true">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="patchDataInput">Texte du séparateur :</label>
+                        <input type="text" name="patchData" id="patchDataInput" placeholder="Ex: NOUVEAU DOCUMENT" maxlength="100" required>
+                        <small>Ce texte apparaîtra clairement sur la page de séparation. Maximum 100 caractères.</small>
+                    </div>
+
+                    <div class="popup-buttons">
+                        <button type="button" onclick="closeGeneratePatchPopup()">Annuler</button>
+                        <button type="submit" class="btn-primary">🏷️ Générer la page de séparation</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Autres popups (view, add, edit) - inchangées -->
+    <!-- Popup pour voir les détails avec onglets (onglet OCR modifié) -->
+    <div id="viewPopup" class="popup" role="dialog" aria-labelledby="view-title" aria-hidden="true">
+        <div class="popup-content">
+            <div class="popup-header">
+                <h3 id="view-title">Détails du profil</h3>
+                <button onclick="closeViewPopup()" class="close-btn" aria-label="Fermer">×</button>
+            </div>
+
+            <div class="tab-container">
+                <!-- Navigation des onglets -->
+                <div class="tab-navigation" role="tablist">
+                    <button class="tab-btn active" role="tab" aria-controls="view-general-tab" onclick="switchTab(event, 'view-general-tab')">
+                        🔧 Général
+                    </button>
+                    <button class="tab-btn" role="tab" aria-controls="view-ocr-tab" onclick="switchTab(event, 'view-ocr-tab')">
+                        🔎 OCR & Patch
+                    </button>
+                </div>
+
+                <!-- Contenu des onglets pour affichage -->
+                <div class="tab-content">
+                    <!-- Onglet Général -->
+                    <div id="view-general-tab" class="tab-pane active" role="tabpanel">
+                        <div id="viewGeneralContent"></div>
+                    </div>
+
+                    <!-- Onglet Appareil -->
+                    <div id="view-device-tab" class="tab-pane" role="tabpanel">
+                        <div id="viewDeviceContent"></div>
+                    </div>
+
+                    <!-- Onglet Numérisation -->
+                    <div id="view-scan-tab" class="tab-pane" role="tabpanel">
+                        <div id="viewScanContent"></div>
+                    </div>
+
+                    <!-- Onglet Avancé -->
+                    <div id="view-advanced-tab" class="tab-pane" role="tabpanel">
+                        <div id="viewAdvancedContent"></div>
+                    </div>
+
+                    <!-- Onglet OCR avec nouveaux champs Patch -->
+                    <div id="view-ocr-tab" class="tab-pane" role="tabpanel">
+                        <div id="viewOcrContent"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-popup-buttons">
+                <button type="button" onclick="closeViewPopup()">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Popup pour ajout avec onglets (onglet OCR modifié) -->
+    <div id="addPopup" class="popup" role="dialog" aria-labelledby="add-title" aria-hidden="true">
+        <div class="popup-content">
+            <div class="popup-header">
+                <h3 id="add-title">Nouveau profil</h3>
+                <button onclick="closeAddPopup()" class="close-btn" aria-label="Fermer">×</button>
+            </div>
+
+            <div class="tab-container">
+                <div class="tab-navigation" role="tablist">
+                    <button class="tab-btn active" role="tab" aria-controls="general-tab" onclick="switchTab(event,'general-tab')">🔧 Général</button>
+                    <button class="tab-btn" role="tab" aria-controls="device-tab" onclick="switchTab(event,'device-tab')">📱 Appareil</button>
+                    <button class="tab-btn" role="tab" aria-controls="scan-tab" onclick="switchTab(event,'scan-tab')">📄 Numérisation</button>
+                    <button class="tab-btn" role="tab" aria-controls="advanced-tab" onclick="switchTab(event,'advanced-tab')">⚙️ Avancé</button>
+                    <button class="tab-btn" role="tab" aria-controls="ocr-tab" onclick="switchTab(event,'ocr-tab')">🔎 OCR & Patch</button>
+                </div>
+
+                <div class="tab-content">
+                    <form id="profileAddForm">
+                        <div id="general-tab" class="tab-pane active" role="tabpanel"></div>
+                        <div id="device-tab" class="tab-pane" role="tabpanel"></div>
+                        <div id="scan-tab" class="tab-pane" role="tabpanel"></div>
+                        <div id="advanced-tab" class="tab-pane" role="tabpanel"></div>
+                        <!-- Onglet OCR avec nouveaux champs Patch -->
+                        <div id="ocr-tab" class="tab-pane" role="tabpanel">
+                            <!-- Contenu généré dynamiquement par JavaScript -->
+                        </div>
+                    </form>
+                    <div class="tab-popup-buttons">
+                        <button type="button" onclick="closeAddPopup()">Annuler</button>
+                        <button type="submit" form="profileAddForm" class="btn-primary">Créer le profil</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Popup pour édition avec onglets (onglet OCR modifié) -->
+    <div id="editPopup" class="popup" role="dialog" aria-labelledby="edit-title" aria-hidden="true">
+        <div class="popup-content">
+            <div class="popup-header">
+                <h3 id="edit-title">Modifier le profil</h3>
+                <button onclick="closeEditPopup()" class="close-btn" aria-label="Fermer">×</button>
+            </div>
+            
+            <div class="tab-container">
+                <!-- Navigation des onglets -->
+                <div class="tab-navigation" role="tablist">
+                    <button class="tab-btn active" role="tab" aria-controls="edit-general-tab" onclick="switchTab(event, 'edit-general-tab')">
+                        🔧 Général
+                    </button>
+                    <button class="tab-btn" role="tab" aria-controls="edit-device-tab" onclick="switchTab(event, 'edit-device-tab')">
+                        📱 Appareil
+                    </button>
+                    <button class="tab-btn" role="tab" aria-controls="edit-scan-tab" onclick="switchTab(event, 'edit-scan-tab')">
+                        📄 Numérisation
+                    </button>
+                    <button class="tab-btn" role="tab" aria-controls="edit-advanced-tab" onclick="switchTab(event, 'edit-advanced-tab')">
+                        ⚙️ Avancé
+                    </button>
+                    <button class="tab-btn" role="tab" aria-controls="edit-ocr-tab" onclick="switchTab(event, 'edit-ocr-tab')">
+                        🔎 OCR & Patch
+                    </button>
+                </div>
+
+                <!-- Contenu des onglets pour édition -->
+                <div class="tab-content">
+                    <form id="profileEditForm">
+                        <div id="edit-general-tab" class="tab-pane active" role="tabpanel">
+                            <div id="editGeneralContent"></div>
+                        </div>
+
+                        <div id="edit-device-tab" class="tab-pane" role="tabpanel">
+                            <div id="editDeviceContent"></div>
+                        </div>
+
+                        <div id="edit-scan-tab" class="tab-pane" role="tabpanel">
+                            <div id="editScanContent"></div>
+                        </div>
+
+                        <div id="edit-advanced-tab" class="tab-pane" role="tabpanel">
+                            <div id="editAdvancedContent"></div>
+                        </div>
+
+                        <!-- Onglet OCR avec nouveaux champs Patch -->
+                        <div id="edit-ocr-tab" class="tab-pane" role="tabpanel">
+                            <div id="editOcrContent"></div>
+                        </div>
+                        <div class="tab-popup-buttons">
+                            <button type="button" onclick="closeEditPopup()">Annuler</button>
+                            <button type="submit" form="profileEditForm" class="btn-primary">Sauvegarder</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="profile-manager.js"></script>
+    <script src="ocr-manager.js"></script>
+    <script src="main.js"></script>
+
+    <!-- JavaScript pour les constructeurs de modèles de nommage -->
+    <script>
+        // Fonctions pour OCR Pattern Builder
+        function addToOCRPattern(code) {
+            const input = document.getElementById('ocrNamingPattern');
+            const start = input.selectionStart;
+            const end = input.selectionEnd;
+            const value = input.value;
+            input.value = value.substring(0, start) + code + value.substring(end);
+            const newPos = start + code.length;
+            input.setSelectionRange(newPos, newPos);
+            input.focus();
+            updateOCRPreview();
+        }
+
+        function setOCRPattern(pattern) {
+            const input = document.getElementById('ocrNamingPattern');
+            input.value = pattern;
+            updateOCRPreview();
+            input.focus();
+        }
+
+        function clearOCRPattern() {
+            const input = document.getElementById('ocrNamingPattern');
+            input.value = '';
+            updateOCRPreview();
+            input.focus();
+        }
+
+        function updateOCRPreview() {
+            const pattern = document.getElementById('ocrNamingPattern').value;
+            const now = new Date();
+            
+            let preview = pattern
+                .replace(/\$\(YYYY\)/g, now.getFullYear().toString())
+                .replace(/\$\(YY\)/g, now.getFullYear().toString().substr(-2))
+                .replace(/\$\(MM\)/g, String(now.getMonth() + 1).padStart(2, '0'))
+                .replace(/\$\(DD\)/g, String(now.getDate()).padStart(2, '0'))
+                .replace(/\$\(HH\)/g, String(now.getHours()).padStart(2, '0'))
+                .replace(/\$\(mm\)/g, String(now.getMinutes()).padStart(2, '0'))
+                .replace(/\$\(ss\)/g, String(now.getSeconds()).padStart(2, '0'))
+                .replace(/\$\(nnn\)/g, '001')
+                .replace(/\$\(nn\)/g, '01')
+                .replace(/\$\(n\)/g, '1');
+            
+            document.getElementById('ocrPreview').textContent = preview || '(vide)';
+        }
+
+        // Fonctions pour Patch Pattern Builder
+        function addToPatchPattern(code) {
+            const input = document.getElementById('patchNamingPattern');
+            const start = input.selectionStart;
+            const end = input.selectionEnd;
+            const value = input.value;
+            input.value = value.substring(0, start) + code + value.substring(end);
+            const newPos = start + code.length;
+            input.setSelectionRange(newPos, newPos);
+            input.focus();
+            updatePatchPreview();
+        }
+
+        function setPatchPattern(pattern) {
+            const input = document.getElementById('patchNamingPattern');
+            input.value = pattern;
+            updatePatchPreview();
+            input.focus();
+        }
+
+        function clearPatchPattern() {
+            const input = document.getElementById('patchNamingPattern');
+            input.value = '';
+            updatePatchPreview();
+            input.focus();
+        }
+
+        function updatePatchPreview() {
+            const pattern = document.getElementById('patchNamingPattern').value;
+            const now = new Date();
+            
+            let preview = pattern
+                .replace(/\$\(YYYY\)/g, now.getFullYear().toString())
+                .replace(/\$\(YY\)/g, now.getFullYear().toString().substr(-2))
+                .replace(/\$\(MM\)/g, String(now.getMonth() + 1).padStart(2, '0'))
+                .replace(/\$\(DD\)/g, String(now.getDate()).padStart(2, '0'))
+                .replace(/\$\(HH\)/g, String(now.getHours()).padStart(2, '0'))
+                .replace(/\$\(mm\)/g, String(now.getMinutes()).padStart(2, '0'))
+                .replace(/\$\(ss\)/g, String(now.getSeconds()).padStart(2, '0'))
+                .replace(/\$\(nnnn\)/g, '0001')
+                .replace(/\$\(nnn\)/g, '001')
+                .replace(/\$\(nn\)/g, '01')
+                .replace(/\$\(n\)/g, '1');
+            
+            document.getElementById('patchPreview').textContent = preview || '(vide)';
+        }
+
+        // Initialisation des aperçus quand les inputs changent manuellement
+        document.addEventListener('DOMContentLoaded', function() {
+            const ocrInput = document.getElementById('ocrNamingPattern');
+            const patchInput = document.getElementById('patchNamingPattern');
+            
+            if (ocrInput) {
+                ocrInput.addEventListener('input', updateOCRPreview);
+                updateOCRPreview();
+            }
+            
+            if (patchInput) {
+                patchInput.addEventListener('input', updatePatchPreview);
+                updatePatchPreview();
+            }
+        });
+
+        // Fonctions pour les popups (à implémenter selon vos besoins)
+        function closeOCRPopup() {
+            document.getElementById('ocrPopup').style.display = 'none';
+        }
+
+        function closePatchPopup() {
+            document.getElementById('patchPopup').style.display = 'none';
+        }
+
+        function closeGeneratePatchPopup() {
+            document.getElementById('generatePatchPopup').style.display = 'none';
+        }
+
+        function closeViewPopup() {
+            document.getElementById('viewPopup').style.display = 'none';
+        }
+
+        function closeAddPopup() {
+            document.getElementById('addPopup').style.display = 'none';
+        }
+
+        function closeEditPopup() {
+            document.getElementById('editPopup').style.display = 'none';
+        }
+
+        function switchTab(event, tabId) {
+            // Masquer tous les onglets
+            const tabPanes = document.querySelectorAll('.tab-pane');
+            tabPanes.forEach(pane => pane.classList.remove('active'));
+            
+            // Désactiver tous les boutons d'onglets
+            const tabBtns = event.target.parentElement.querySelectorAll('.tab-btn');
+            tabBtns.forEach(btn => btn.classList.remove('active'));
+            
+            // Activer l'onglet sélectionné
+            document.getElementById(tabId).classList.add('active');
+            event.target.classList.add('active');
+        }
+    </script>
+
+    <!-- Script de fallback pour le développement -->
+    <script>
+        // Vérification que tous les scripts sont chargés
+        window.addEventListener('load', function() {
+            if (typeof ProfileManager === 'undefined' || typeof OCRManager === 'undefined') {
+                console.error('Erreur: Composants non chargés. Vérifiez que tous les fichiers JS sont présents.');
+                document.body.innerHTML = `
+                    <div style="padding: 20px; text-align: center; background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;">
+                        <h2>Erreur de chargement</h2>
+                        <p>Les composants JavaScript n'ont pas pu être chargés.</p>
+                        <p>Vérifiez que les fichiers suivants sont présents :</p>
+                        <ul style="text-align: left; display: inline-block;">
+                            <li>profile-manager.js</li>
+                            <li>ocr-manager.js</li>
+                            <li>main.js</li>
+                        </ul>
+                    </div>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>

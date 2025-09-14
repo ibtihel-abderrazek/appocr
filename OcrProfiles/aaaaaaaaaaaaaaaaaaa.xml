@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<OcrConfiguration version="1.0" created="2025-09-14T13:38:12.832Z">
+    <Profile name="aaaaaaaaaaaaaaaaaaa">
+        <Settings>
+            <OcrMode>true</OcrMode>
+            <Language>ara</Language>
+            <NamingPattern>$(DD)-$(MM)-$(YYYY)-$(n)</NamingPattern>
+            <PdfMode>pdf</PdfMode>
+        </Settings>
+        <PatchSettings>
+            <PatchMode>true</PatchMode>
+            <PatchNaming>barcode</PatchNaming>
+        </PatchSettings>
+        <Advanced>
+            <AutoDetectLanguage>false</AutoDetectLanguage>
+            <EnablePreprocessing>true</EnablePreprocessing>
+            <OutputQuality>high</OutputQuality>
+        </Advanced>
+    </Profile>
+    <Metadata>
+        <Created>2025-09-14T13:38:12.832Z</Created>
+        <LastModified>2025-09-14T13:38:12.832Z</LastModified>
+        <Application>ScannerProfileManager</Application>
+        <Version>1.0</Version>
+        <Generator>wiem</Generator>
+    </Metadata>
+</OcrConfiguration>
