@@ -7,7 +7,7 @@ const ScannerController = require('../controllers/scannerController');
 const scannerController = new ScannerController();
 
 // Route principale - essaie NAPS2 puis alternatives
-router.get('/scanners', scannerController.getConnectedScanners);
+router.get('/', scannerController.getConnectedScanners);
 
 // Route alternative - utilise seulement PowerShell
 router.get('/scanners/alternative', scannerController.getConnectedScannersAlternative);

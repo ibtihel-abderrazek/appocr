@@ -26,8 +26,9 @@ class XmlService {
             <PdfMode>pdfa</PdfMode>
         </Settings>
         <PatchSettings>
-            <PatchMode>false</PatchMode>
+            <PatchMode>T_classique</PatchMode>
             <PatchNaming>barcode_ocr_generic</PatchNaming>
+            <PatchEnabled>false</PatchEnabled>
         </PatchSettings>
         <Advanced>
             <AutoDetectLanguage>false</AutoDetectLanguage>
@@ -57,9 +58,10 @@ class XmlService {
     this.setElementText(doc, 'AutoDetectLanguage', (!config.lang || config.lang === '') ? 'true' : 'false');
     this.setElementText(doc, 'Generator', require('os').hostname());
 
-    // ✅ Remplir les nouveaux champs Patch
-    this.setElementText(doc, 'PatchMode', config.patchMode ? 'true' : 'false');
+    // ✅ Remplir les nouveaux champs Patch avec le nouveau patchMode
+    this.setElementText(doc, 'PatchMode', config.patchMode || 'T_classique');
     this.setElementText(doc, 'PatchNaming', config.patchNaming || 'barcode_ocr_generic');
+    this.setElementText(doc, 'PatchEnabled', config.patchEnabled ? 'true' : 'false');
 
     // Paramètres avancés optionnels
     if (config.dpi) {
@@ -72,7 +74,7 @@ class XmlService {
     return doc;
 }
 
-// ✅ Modifier la méthode parseOcrDocument pour lire la section PatchSettings
+// ✅ Modifier la méthode parseOcrDocument pour lire la section PatchSettings mise à jour
 parseOcrDocument(doc) {
     try {
         const profile = doc.getElementsByTagName('Profile')[0];
@@ -94,14 +96,16 @@ parseOcrDocument(doc) {
             lastModified: metadata ? this.getElementText(metadata, 'LastModified') : null
         };
 
-        // ✅ Lire les champs Patch
+        // ✅ Lire les champs Patch avec le nouveau patchMode
         if (patchSettings) {
-            result.patchMode = this.getElementText(patchSettings, 'PatchMode') === 'true';
+            result.patchMode = this.getElementText(patchSettings, 'PatchMode') || 'T_classique';
             result.patchNaming = this.getElementText(patchSettings, 'PatchNaming') || 'barcode_ocr_generic';
+            result.patchEnabled = this.getElementText(patchSettings, 'PatchEnabled') === 'true';
         } else {
             // Valeurs par défaut pour rétrocompatibilité
-            result.patchMode = false;
+            result.patchMode = 'T_classique';
             result.patchNaming = 'barcode_ocr_generic';
+            result.patchEnabled = false;
         }
 
         // Paramètres avancés optionnels
@@ -206,12 +210,12 @@ parseOcrDocument(doc) {
         });
     }
 
-    // ✅ Vérifier la structure PatchSettings
+    // ✅ Vérifier la structure PatchSettings mise à jour
     const patchSettings = doc.getElementsByTagName('PatchSettings')[0];
     if (!patchSettings) {
         warnings.push('Élément PatchSettings manquant (sera créé automatiquement)');
     } else {
-        const requiredPatchSettings = ['PatchMode', 'PatchNaming'];
+        const requiredPatchSettings = ['PatchMode', 'PatchNaming', 'PatchEnabled'];
         requiredPatchSettings.forEach(setting => {
             const element = patchSettings.getElementsByTagName(setting)[0];
             if (!element) {
@@ -242,12 +246,13 @@ parseOcrDocument(doc) {
     };
 }
 
-// ✅ Nouvelle méthode pour valider les paramètres Patch
+// ✅ Méthode mise à jour pour valider les paramètres Patch
 validatePatchSettingValue(settingName, value, errors, warnings) {
     switch (settingName) {
         case 'PatchMode':
-            if (value !== 'true' && value !== 'false') {
-                errors.push('PatchMode doit être "true" ou "false"');
+            const validPatchModes = ['T_classique', 'T_with_bookmarks'];
+            if (!validPatchModes.includes(value)) {
+                errors.push(`PatchMode "${value}" invalide. Modes supportés: ${validPatchModes.join(', ')}`);
             }
             break;
         
@@ -255,6 +260,12 @@ validatePatchSettingValue(settingName, value, errors, warnings) {
             const validStrategies = ['barcode_ocr_generic', 'barcode', 'ocr', 'generic'];
             if (!validStrategies.includes(value)) {
                 errors.push(`PatchNaming "${value}" invalide. Stratégies supportées: ${validStrategies.join(', ')}`);
+            }
+            break;
+
+        case 'PatchEnabled':
+            if (value !== 'true' && value !== 'false') {
+                errors.push('PatchEnabled doit être "true" ou "false"');
             }
             break;
     }
@@ -312,9 +323,10 @@ validatePatchSettingValue(settingName, value, errors, warnings) {
     this.setElementText(doc, 'PdfMode', config.pdfMode || 'pdfa');
     this.setElementText(doc, 'AutoDetectLanguage', (!config.lang || config.lang === '') ? 'true' : 'false');
     
-    // ✅ Mettre à jour les paramètres Patch
-    this.setElementText(doc, 'PatchMode', config.patchMode ? 'true' : 'false');
+    // ✅ Mettre à jour les paramètres Patch avec le nouveau patchMode
+    this.setElementText(doc, 'PatchMode', config.patchMode || 'T_classique');
     this.setElementText(doc, 'PatchNaming', config.patchNaming || 'barcode_ocr_generic');
+    this.setElementText(doc, 'PatchEnabled', config.patchEnabled ? 'true' : 'false');
     
     // Mettre à jour les métadonnées
     this.setElementText(doc, 'LastModified', now);
@@ -386,18 +398,22 @@ validatePatchSettingValue(settingName, value, errors, warnings) {
             throw new Error('Élément Profile manquant');
         }
 
-        // ✅ Ajouter la section PatchSettings si elle n'existe pas
+        // ✅ Ajouter/migrer la section PatchSettings avec le nouveau patchMode
         let patchSettings = doc.getElementsByTagName('PatchSettings')[0];
         if (!patchSettings) {
             patchSettings = doc.createElement('PatchSettings');
             
             const patchModeElement = doc.createElement('PatchMode');
-            patchModeElement.textContent = 'false';
+            patchModeElement.textContent = 'T_classique';
             patchSettings.appendChild(patchModeElement);
             
             const patchNamingElement = doc.createElement('PatchNaming');
             patchNamingElement.textContent = 'barcode_ocr_generic';
             patchSettings.appendChild(patchNamingElement);
+
+            const patchEnabledElement = doc.createElement('PatchEnabled');
+            patchEnabledElement.textContent = 'false';
+            patchSettings.appendChild(patchEnabledElement);
             
             // Insérer après Settings et avant Advanced
             const settings = doc.getElementsByTagName('Settings')[0];
@@ -416,6 +432,24 @@ validatePatchSettingValue(settingName, value, errors, warnings) {
             }
             
             console.log('Section PatchSettings ajoutée lors de la migration');
+        } else {
+            // Migrer l'ancienne structure si nécessaire
+            if (!patchSettings.getElementsByTagName('PatchEnabled')[0]) {
+                const patchEnabledElement = doc.createElement('PatchEnabled');
+                patchEnabledElement.textContent = 'false';
+                patchSettings.appendChild(patchEnabledElement);
+            }
+
+            // Vérifier et corriger le format du PatchMode
+            const patchModeElement = patchSettings.getElementsByTagName('PatchMode')[0];
+            if (patchModeElement) {
+                const currentValue = patchModeElement.textContent;
+                // Migration des anciens formats
+                if (currentValue === 'true' || currentValue === 'false') {
+                    patchModeElement.textContent = currentValue === 'true' ? 'T_with_bookmarks' : 'T_classique';
+                    console.log(`PatchMode migré de ${currentValue} vers ${patchModeElement.textContent}`);
+                }
+            }
         }
         
         // Ajouter les nouveaux champs dans Advanced si nécessaire
@@ -439,7 +473,12 @@ validatePatchSettingValue(settingName, value, errors, warnings) {
     }
 }
 
-// ✅ Nouvelle méthode pour valider une stratégie de nommage Patch
+// ✅ Méthode mise à jour pour valider une stratégie de nommage Patch et mode
+isValidPatchMode(patchMode) {
+    const validModes = ['T_classique', 'T_with_bookmarks'];
+    return validModes.includes(patchMode);
+}
+
 isValidPatchNamingStrategy(strategy) {
     const validStrategies = [
         'barcode_ocr_generic',
@@ -450,7 +489,22 @@ isValidPatchNamingStrategy(strategy) {
     return validStrategies.includes(strategy);
 }
 
-// ✅ Nouvelle méthode pour obtenir les stratégies disponibles
+// ✅ Méthode mise à jour pour obtenir les modes et stratégies disponibles
+getAvailablePatchModes() {
+    return [
+        {
+            value: 'T_classique',
+            label: '⚡ Traitement classique (Standard)',
+            description: 'Traitement standard sans fonctionnalités avancées'
+        },
+        {
+            value: 'T_with_bookmarks',
+            label: '🔖 Traitement avec signets automatiques',
+            description: 'Traitement avancé avec création automatique de signets'
+        }
+    ];
+}
+
 getAvailablePatchStrategies() {
     return [
         {
@@ -480,7 +534,7 @@ getAvailablePatchStrategies() {
     ];
 }
 
-// ✅ Méthode pour créer un document avec configuration Patch par défaut
+// ✅ Méthode mise à jour pour créer un document avec configuration Patch par défaut
 createDefaultPatchDocument(profileName) {
     const config = {
         profileName: profileName,
@@ -488,34 +542,38 @@ createDefaultPatchDocument(profileName) {
         lang: 'fra',
         namingPattern: '$(DD)-$(MM)-$(YYYY)-$(n)',
         pdfMode: 'pdfa',
-        patchMode: false,
-        patchNaming: 'barcode_ocr_generic'
+        patchMode: 'T_classique',
+        patchNaming: 'barcode_ocr_generic',
+        patchEnabled: false
     };
     
     return this.createOcrDocument(config);
 }
 
-// ✅ Méthode pour extraire uniquement la configuration Patch d'un document
+// ✅ Méthode mise à jour pour extraire la configuration Patch d'un document
 extractPatchConfig(doc) {
     try {
         const patchSettings = doc.getElementsByTagName('PatchSettings')[0];
         
         if (!patchSettings) {
             return {
-                patchMode: false,
-                patchNaming: 'barcode_ocr_generic'
+                patchMode: 'T_classique',
+                patchNaming: 'barcode_ocr_generic',
+                patchEnabled: false
             };
         }
         
         return {
-            patchMode: this.getElementText(patchSettings, 'PatchMode') === 'true',
-            patchNaming: this.getElementText(patchSettings, 'PatchNaming') || 'barcode_ocr_generic'
+            patchMode: this.getElementText(patchSettings, 'PatchMode') || 'T_classique',
+            patchNaming: this.getElementText(patchSettings, 'PatchNaming') || 'barcode_ocr_generic',
+            patchEnabled: this.getElementText(patchSettings, 'PatchEnabled') === 'true'
         };
     } catch (error) {
         console.error('Erreur extraction config Patch:', error);
         return {
-            patchMode: false,
-            patchNaming: 'barcode_ocr_generic'
+            patchMode: 'T_classique',
+            patchNaming: 'barcode_ocr_generic',
+            patchEnabled: false
         };
     }
 }
@@ -550,7 +608,7 @@ extractPatchConfig(doc) {
         }
     }
 
-    // Méthodes utilitaires privées
+    // Méthodes utilitaires privées (inchangées)
 
     setElementText(doc, tagName, text) {
         const elements = doc.getElementsByTagName(tagName);

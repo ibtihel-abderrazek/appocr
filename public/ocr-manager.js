@@ -1,8 +1,10 @@
-// ocr-manager.js - Version complète et corrigée
+// ocr-manager.js - Version modifiée avec exécution directe si profil sélectionné
+
 class OCRManager {
     constructor() {
         this.importedFile = null;
         this.importedFiles = [];
+        this.cachedProfileConfig = null; // Cache pour éviter des appels répétés
         this.init();
     }
 
@@ -99,96 +101,357 @@ class OCRManager {
         preview.innerHTML = `<iframe src="${url}" width="100%" height="400" style="border:1px solid #ccc; border-radius: 4px;"></iframe>`;
     }
 
-    // =================== GESTION DES PARAMÈTRES PROFIL ===================
-    async loadProfileOCRSettings() {
+    // =================== MÉTHODES DE RÉCUPÉRATION DES PARAMÈTRES PROFIL ===================
+
+    async getSelectedProfileOcrConfig() {
         try {
-            // Vérifier si ProfileManager existe et a un profil sélectionné
-            if (window.profileManager && window.profileManager.selectedProfile) {
-                const profileName = window.profileManager.selectedProfile;
-                const profileSettings = await this.getProfileSettings(profileName);
-                
-                if (profileSettings) {
-                    // Appliquer les paramètres OCR du profil
-                    this.applyOCRSettings(profileSettings.ocrSettings || {});
-                    // Appliquer les paramètres Patch du profil
-                    this.applyPatchSettings(profileSettings.patchSettings || {});
-                    
-                    console.log(`Paramètres du profil "${profileName}" chargés`);
-                    return profileSettings;
-                }
+            // Vérifier qu'un profil est sélectionné
+            if (!window.profileManager || !window.profileManager.selectedProfile) {
+                console.log('Aucun profil sélectionné');
+                return this.getDefaultOcrPatchConfig();
             }
+
+            const profileName = window.profileManager.selectedProfile;
+            console.log(`Récupération configuration OCR/Patch pour le profil: ${profileName}`);
+
+            // Utiliser le cache si disponible et récent
+            if (this.cachedProfileConfig && 
+                this.cachedProfileConfig.profileName === profileName &&
+                Date.now() - this.cachedProfileConfig.timestamp < 30000) { // Cache valide 30 secondes
+                console.log('Utilisation du cache de configuration');
+                return this.cachedProfileConfig.config;
+            }
+
+            // Récupérer la configuration via ProfileManager (qui fait déjà la bonne récupération)
+            const ocrConfig = await this.loadOcrConfigFromProfile(profileName);
             
-            // Si aucun profil sélectionné ou pas de ProfileManager, charger les paramètres par défaut
-            const defaultSettings = this.getDefaultProfileSettings();
-            this.applyOCRSettings(defaultSettings.ocrSettings);
-            this.applyPatchSettings(defaultSettings.patchSettings);
-            
-            return defaultSettings;
-            
+            // Mettre en cache
+            this.cachedProfileConfig = {
+                profileName: profileName,
+                config: ocrConfig,
+                timestamp: Date.now()
+            };
+
+            console.log('Configuration OCR/Patch récupérée:', ocrConfig);
+            return ocrConfig;
+
         } catch (error) {
-            console.error('Erreur lors du chargement des paramètres du profil:', error);
-            
-            // En cas d'erreur, utiliser les paramètres par défaut
-            const defaultSettings = this.getDefaultProfileSettings();
-            this.applyOCRSettings(defaultSettings.ocrSettings);
-            this.applyPatchSettings(defaultSettings.patchSettings);
-            
-            return defaultSettings;
+            console.error('Erreur lors de la récupération de la configuration:', error);
+            return this.getDefaultOcrPatchConfig();
         }
     }
 
-    async getProfileSettings(profileName) {
+    async loadOcrConfigFromProfile(profileName) {
         try {
-            // Tenter de récupérer les paramètres depuis le serveur
-            const response = await fetch(`http://localhost:3000/profiles/${profileName}`);
+            const response = await fetch(`/api/profile/ocr/${encodeURIComponent(profileName)}`);
             if (response.ok) {
-                const profileData = await response.json();
-                return profileData;
+                const data = await response.json();
+                console.log("Données renvoyées par l'API :", data);
+                return {
+                    // Paramètres OCR standards
+                    language: data.lang || 'fra',
+                    confidence: '80',
+                    dpi: '300',
+                    preprocessImage: 'true',
+                    enhanceContrast: 'true',
+                    removeNoise: 'false',
+                    autoRotate: 'true',
+                    
+                    // Paramètres spécifiques à l'OCR
+                    ocrMode: data.ocrMode || false,
+                    namingPattern: data.namingPattern || '$(DD)-$(MM)-$(YYYY)-$(n)',
+                    pdfMode: data.pdfMode || 'pdfa',
+                    
+                    // ✅ Paramètres Patch avec le nouveau patchMode
+                    patchMode: data.patchType|| 'T_classique',
+                    patchNaming: data.patchNaming || 'barcode_ocr_generic',
+                    patchEnabled: data.patchEnabled || false,
+                    splitByBarcode: data.patchEnabled ? 'true' : 'false',
+                    barcodePosition: 'top-right',
+                    outputFormat: 'pdf',
+                    includeOriginalPages: 'false'
+                };
+            } else {
+                console.log(`Aucune configuration OCR trouvée pour le profil ${profileName}`);
+                return this.getDefaultOcrPatchConfig();
             }
-            
-            // Si le serveur n'est pas disponible, tenter de récupérer depuis localStorage
-            const savedProfiles = localStorage.getItem('ocrProfiles');
-            if (savedProfiles) {
-                const profiles = JSON.parse(savedProfiles);
-                return profiles[profileName] || null;
-            }
-            
-            return null;
-            
         } catch (error) {
-            console.error('Erreur lors de la récupération des paramètres du profil:', error);
-            return null;
+            console.warn('Erreur lors de la récupération de la configuration OCR:', error);
+            return this.getDefaultOcrPatchConfig();
         }
     }
 
-    getDefaultProfileSettings() {
+    getDefaultOcrPatchConfig() {
         return {
-            ocrSettings: {
-                language: 'fra',
-                confidence: '80',
-                dpi: '300',
-                preprocessImage: 'true',
-                enhanceContrast: 'true',
-                removeNoise: 'false',
-                autoRotate: 'true'
-            },
-            patchSettings: {
-                splitByBarcode: 'true',
-                barcodePosition: 'top-right',
-                namingPattern: 'barcode',
-                outputFormat: 'pdf',
-                includeOriginalPages: 'false'
-            }
+            // Paramètres OCR standards
+            language: 'fra',
+            confidence: '80',
+            dpi: '300',
+            preprocessImage: 'true',
+            enhanceContrast: 'true',
+            removeNoise: 'false',
+            autoRotate: 'true',
+            
+            // Paramètres spécifiques OCR
+            ocrMode: false,
+            namingPattern: '$(DD)-$(MM)-$(YYYY)-$(n)',
+            pdfMode: 'pdfa',
+            
+            // ✅ Paramètres Patch par défaut avec nouveau patchMode
+            patchMode: 'T_classique',
+            patchNaming: 'barcode_ocr_generic',
+            patchEnabled: false,
+            splitByBarcode: 'false',
+            barcodePosition: 'top-right',
+            outputFormat: 'pdf',
+            includeOriginalPages: 'false'
         };
     }
 
-    // =================== TRAITEMENT OCR ===================
+    // Appliquer les paramètres OCR au formulaire (inchangé)
+    applyOcrConfigToForm(config) {
+        const form = document.getElementById("ocrForm");
+        if (!form) {
+            console.error('Formulaire OCR non trouvé');
+            return;
+        }
+
+        console.log('Application de la configuration OCR au formulaire:', config);
+
+        const fieldMappings = {
+            'language': config.language,
+            'confidence': config.confidence,
+            'dpi': config.dpi,
+            'preprocessImage': config.preprocessImage,
+            'enhanceContrast': config.enhanceContrast,
+            'removeNoise': config.removeNoise,
+            'autoRotate': config.autoRotate,
+            'namingPattern': config.namingPattern,
+            'pdfMode': config.pdfMode,
+            'patchMode': config.patchMode,
+            'pactchNaming': config.patchNaming
+        };
+
+        Object.entries(fieldMappings).forEach(([fieldName, value]) => {
+            const field = form.querySelector(`[name="${fieldName}"]`);
+            if (field) {
+                if (field.type === 'checkbox') {
+                    field.checked = value === 'true' || value === true;
+                } else {
+                    field.value = value || '';
+                }
+                console.log(`OCR - ${fieldName}: ${value} appliqué`);
+            } else {
+                console.warn(`Champ OCR ${fieldName} non trouvé dans le formulaire`);
+            }
+        });
+    }
+
+    // ✅ Méthode mise à jour pour appliquer les paramètres Patch au formulaire
+    applyPatchConfigToForm(config) {
+        const form = document.getElementById("patchForm");
+        if (!form) {
+            console.error('Formulaire Patch non trouvé');
+            return;
+        }
+
+        console.log('Application de la configuration Patch au formulaire:', config);
+
+        const patchMappings = [
+            { htmlName: 'patchMode', configKey: 'patchMode', type: 'select' },
+            { htmlName: 'naming', configKey: 'patchNaming', type: 'select' },
+            { htmlName: 'namingPattern', configKey: 'namingPattern', type: 'text' },
+            { htmlName: 'ocrMode', configKey: 'patchEnabled', type: 'select', transform: (value) => {
+                return (value === true || value === 'true') ? 'true' : 'false';
+            }}
+        ];
+
+        let appliedCount = 0;
+
+        patchMappings.forEach(({ htmlName, configKey, type, transform }) => {
+            let value = config[configKey];
+            
+            if (transform && value !== undefined && value !== null) {
+                value = transform(value);
+            }
+            
+            if (value === undefined || value === null) return;
+            
+            let field = form.querySelector(`[name="${htmlName}"]`) || form.querySelector(`#${htmlName}`);
+            
+            if (field) {
+                try {
+                    if (type === 'checkbox' || field.type === 'checkbox') {
+                        field.checked = value === 'true' || value === true;
+                    } else {
+                        field.value = value || '';
+                        
+                        if (field.tagName === 'SELECT') {
+                            field.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                    }
+                    console.log(`Patch - ${htmlName}: "${value}" appliqué au champ`);
+                    appliedCount++;
+                } catch (error) {
+                    console.warn(`Erreur application Patch ${htmlName}:`, error);
+                }
+            } else {
+                console.warn(`Champ Patch "${htmlName}" non trouvé dans le formulaire`);
+            }
+        });
+
+        console.log(`${appliedCount}/${patchMappings.length} paramètres Patch appliqués`);
+    }
+
+    // =================== NOUVELLES MÉTHODES POUR EXÉCUTION DIRECTE ===================
+
+    // ✅ NOUVELLE MÉTHODE : Créer FormData à partir de la configuration du profil
+    createOcrFormDataFromConfig(config) {
+        const formData = new FormData();
+        
+        // Ajouter le fichier
+        formData.append("file", this.importedFile);
+        
+        // Paramètres OCR
+        formData.append("ocrMode", "true");
+        formData.append("containsPatch", "false");
+        formData.append("lang", config.language || 'fra');
+        formData.append("namingPattern", config.namingPattern || '$(DD)-$(MM)-$(YYYY)-$(n)');
+        formData.append("mode", config.pdfMode || 'pdfa');
+        formData.append("patchMode", config.patchMode || 'T_classique');
+        formData.append("patchNaming", config.patchNaming || 'barcode_ocr_generic');
+        // Paramètres techniques (valeurs par défaut)
+        formData.append("confidence", config.confidence || '80');
+        formData.append("dpi", config.dpi || '300');
+        formData.append("preprocessImage", config.preprocessImage || 'true');
+        formData.append("enhanceContrast", config.enhanceContrast || 'true');
+        formData.append("removeNoise", config.removeNoise || 'false');
+        formData.append("autoRotate", config.autoRotate || 'true');
+        
+        console.log('FormData OCR créé à partir de la configuration:', config);
+        return formData;
+    }
+
+    // ✅ MÉTHODE MISE À JOUR : Créer FormData Patch à partir de la configuration du profil avec patchMode
+    createPatchFormDataFromConfig(config) {
+        const formData = new FormData();
+        
+        // Ajouter le fichier
+        formData.append("file", this.importedFile);
+        
+        // ✅ Paramètres Patch avec le nouveau patchMode
+        formData.append("containsPatch", "true");
+        formData.append("patchMode", config.patchMode || 'T_classique');
+        formData.append("naming", config.patchNaming || 'barcode_ocr_generic');
+        formData.append("namingPattern", config.namingPattern || '$(DD)-$(MM)-$(YYYY)-$(n)');
+        formData.append("ocrMode", config.patchEnabled ? "true" : "false");
+        
+        // Paramètres additionnels
+        formData.append("splitByBarcode", config.splitByBarcode || 'false');
+        formData.append("outputFormat", config.outputFormat || 'pdf');
+        
+        console.log('FormData Patch créé à partir de la configuration avec patchMode:', config.patchMode);
+        return formData;
+    }
+
+    // ✅ MÉTHODE MODIFIÉE : Vérifier si un profil est sélectionné et exécuter directement
+    async checkProfileAndExecuteOcr() {
+        // Vérifier qu'un fichier est importé
+        if (!this.importedFile) {
+            this.showNotification("Veuillez importer un fichier avant de lancer l'OCR.", 'warning');
+            return false;
+        }
+
+        // Vérifier qu'un profil est sélectionné
+        if (!window.profileManager || !window.profileManager.selectedProfile) {
+            console.log('Aucun profil sélectionné, ouverture de la popup');
+            return false; // Indique qu'il faut ouvrir la popup
+        }
+
+        const profileName = window.profileManager.selectedProfile;
+        console.log(`Profil sélectionné détecté: ${profileName}, exécution directe de l'OCR`);
+
+        try {
+            // Afficher le message de traitement
+            const importZone = document.getElementById("importZone");
+            if (importZone) {
+                importZone.innerHTML = `<p>🔄 Traitement OCR automatique avec le profil "${profileName}"...</p>`;
+            }
+
+            // Récupérer la configuration du profil
+            const config = await this.getSelectedProfileOcrConfig();
+            
+            // Créer FormData à partir de la configuration
+            const formData = this.createOcrFormDataFromConfig(config);
+            
+            // Exécuter le traitement OCR
+            await this.executeOcrRequest(formData);
+            
+            return true; // Indique que l'exécution directe a eu lieu
+            
+        } catch (error) {
+            console.error('Erreur lors de l\'exécution automatique OCR:', error);
+            this.showProcessingError("OCR automatique", error.message);
+            return true; // Même en cas d'erreur, pas besoin d'ouvrir la popup
+        }
+    }
+
+    // ✅ MÉTHODE MODIFIÉE : Vérifier si un profil est sélectionné et exécuter directement Patch
+    async checkProfileAndExecutePatch() {
+        // Vérifier qu'un fichier est importé
+        if (!this.importedFile) {
+            this.showNotification("Veuillez importer un fichier avant de traiter les patches.", 'warning');
+            return false;
+        }
+
+        // Vérifier qu'un profil est sélectionné
+        if (!window.profileManager || !window.profileManager.selectedProfile) {
+            console.log('Aucun profil sélectionné, ouverture de la popup');
+            return false; // Indique qu'il faut ouvrir la popup
+        }
+
+        const profileName = window.profileManager.selectedProfile;
+        console.log(`Profil sélectionné détecté: ${profileName}, exécution directe du traitement Patch`);
+
+        try {
+            // Afficher le message de traitement
+            const importZone = document.getElementById("importZone");
+            if (importZone) {
+                importZone.innerHTML = `<p>🔄 Traitement Patch automatique avec le profil "${profileName}"...</p>`;
+            }
+
+            // Récupérer la configuration du profil
+            const config = await this.getSelectedProfileOcrConfig();
+            
+            // Créer FormData à partir de la configuration
+            const formData = this.createPatchFormDataFromConfig(config);
+            
+            // Exécuter le traitement Patch
+            await this.executePatchRequest(formData);
+            
+            return true; // Indique que l'exécution directe a eu lieu
+            
+        } catch (error) {
+            console.error('Erreur lors de l\'exécution automatique Patch:', error);
+            this.showProcessingError("Patch automatique", error.message);
+            return true; // Même en cas d'erreur, pas besoin d'ouvrir la popup
+        }
+    }
+
+    // =================== TRAITEMENT OCR MODIFIÉ ===================
     setupOCRProcessing() {
         const btnOCR = document.getElementById("btnOCR");
         const ocrForm = document.getElementById("ocrForm");
 
         if (btnOCR) {
-            btnOCR.addEventListener("click", () => this.openOCRDialog());
+            // ✅ MODIFICATION PRINCIPALE : Nouvelle logique de clic
+            btnOCR.addEventListener("click", async () => {
+                const shouldExecuteDirectly = await this.checkProfileAndExecuteOcr();
+                if (!shouldExecuteDirectly) {
+                    // Si pas d'exécution directe, ouvrir la popup
+                    await this.openOCRDialog();
+                }
+            });
         }
 
         if (ocrForm) {
@@ -196,21 +459,79 @@ class OCRManager {
         }
     }
 
+    // ✅ MÉTHODE MODIFIÉE : openOCRDialog reste pour les cas où aucun profil n'est sélectionné
     async openOCRDialog() {
-        if (!this.importedFile) {
-            this.showNotification("Veuillez importer un fichier avant de lancer l'OCR.", 'warning');
+        const ocrPopup = document.getElementById("ocrPopup");
+        if (!ocrPopup) {
+            this.showNotification("Interface OCR non disponible.", 'error');
             return;
         }
-        
-        const ocrPopup = document.getElementById("ocrPopup");
-        if (ocrPopup) {
+
+        try {
+            // Afficher le popup avec un indicateur de chargement
             ocrPopup.style.display = "flex";
             
-            // Charger automatiquement les paramètres du profil sélectionné
-            await this.loadProfileOCRSettings();
+            const loadingIndicator = document.createElement('div');
+            loadingIndicator.id = 'ocrLoadingIndicator';
+            loadingIndicator.style.cssText = `
+                position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                background: rgba(0,0,0,0.8); color: white; padding: 15px 25px;
+                border-radius: 8px; z-index: 1002;
+            `;
+            loadingIndicator.innerHTML = '🔄 Chargement des paramètres...';
+            ocrPopup.appendChild(loadingIndicator);
+
+            // Récupérer et appliquer la configuration (même si pas de profil, pour les valeurs par défaut)
+            const config = await this.getSelectedProfileOcrConfig();
+            this.applyOcrConfigToForm(config);
+
+            // Supprimer l'indicateur de chargement
+            const indicator = document.getElementById('ocrLoadingIndicator');
+            if (indicator) {
+                indicator.remove();
+            }
+
+            console.log('Dialogue OCR ouvert');
+            
+        } catch (error) {
+            console.error('Erreur lors de l\'ouverture du dialogue OCR:', error);
+            
+            const indicator = document.getElementById('ocrLoadingIndicator');
+            if (indicator) {
+                indicator.remove();
+            }
+            
+            this.showNotification('Erreur lors du chargement des paramètres: ' + error.message, 'warning');
         }
     }
 
+    // ✅ NOUVELLE MÉTHODE : Extraction de la logique d'exécution OCR
+    async executeOcrRequest(formData) {
+        try {
+            const response = await fetch(this.getOCREndpoint(), {
+                method: "POST",
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error(`Erreur serveur: ${response.status} ${response.statusText}`);
+            }
+
+            const contentType = response.headers.get("content-type");
+            
+            if (contentType && contentType.includes("application/json")) {
+                await this.handleMultipleFiles(response);
+            } else {
+                await this.handleSingleFile(response);
+            }
+
+        } catch (err) {
+            console.error("Erreur OCR :", err);
+            throw err; // Re-lancer pour gestion par la méthode appelante
+        }
+    }
+
+    // Méthode processOCR modifiée pour utiliser executeOcrRequest
     async processOCR(e) {
         e.preventDefault();
 
@@ -232,42 +553,28 @@ class OCRManager {
         // Forcer le mode OCR à true pour OCR seul
         formData.set("ocrMode", "true");
         formData.set("containsPatch", "false");
-        const namingPattern = formData.get("namingPattern");
-        if (namingPattern) {
-            console.log("Pattern de nommage pour patch appliqué:", namingPattern);
-        }
         
         try {
-            const response = await fetch(this.getOCREndpoint(), {
-                method: "POST",
-                body: formData
-            });
-
-            if (!response.ok) {
-                throw new Error(`Erreur serveur: ${response.status} ${response.statusText}`);
-            }
-
-            const contentType = response.headers.get("content-type");
-            
-            if (contentType && contentType.includes("application/json")) {
-                await this.handleMultipleFiles(response);
-            } else {
-                await this.handleSingleFile(response);
-            }
-
+            await this.executeOcrRequest(formData);
         } catch (err) {
-            console.error("Erreur OCR :", err);
             this.showProcessingError("OCR", err.message);
         }
     }
 
-    // =================== TRAITEMENT PATCH ===================
+    // =================== TRAITEMENT PATCH MODIFIÉ ===================
     setupPatchProcessing() {
         const btnPatch = document.getElementById("btnPatch");
         const patchForm = document.getElementById("patchForm");
 
         if (btnPatch) {
-            btnPatch.addEventListener("click", () => this.openPatchDialog());
+            // ✅ MODIFICATION PRINCIPALE : Nouvelle logique de clic pour Patch
+            btnPatch.addEventListener("click", async () => {
+                const shouldExecuteDirectly = await this.checkProfileAndExecutePatch();
+                if (!shouldExecuteDirectly) {
+                    // Si pas d'exécution directe, ouvrir la popup
+                    await this.openPatchDialog();
+                }
+            });
         }
 
         if (patchForm) {
@@ -275,46 +582,54 @@ class OCRManager {
         }
     }
 
+    // ✅ MÉTHODE MODIFIÉE : openPatchDialog reste pour les cas où aucun profil n'est sélectionné
     async openPatchDialog() {
-        if (!this.importedFile) {
-            this.showNotification("Veuillez importer un fichier avant de traiter les patches.", 'warning');
+        const patchPopup = document.getElementById("patchPopup");
+        if (!patchPopup) {
+            this.showNotification("Interface Patch non disponible.", 'error');
             return;
         }
-        
-        const patchPopup = document.getElementById("patchPopup");
-        if (patchPopup) {
+
+        try {
+            // Afficher le popup avec un indicateur de chargement
             patchPopup.style.display = "flex";
             
-            // Charger automatiquement les paramètres du profil sélectionné
-            await this.loadProfileOCRSettings();
+            const loadingIndicator = document.createElement('div');
+            loadingIndicator.id = 'patchLoadingIndicator';
+            loadingIndicator.style.cssText = `
+                position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                background: rgba(0,0,0,0.8); color: white; padding: 15px 25px;
+                border-radius: 8px; z-index: 1002;
+            `;
+            loadingIndicator.innerHTML = '🔄 Chargement des paramètres Patch...';
+            patchPopup.appendChild(loadingIndicator);
+
+            // Récupérer et appliquer la configuration
+            const config = await this.getSelectedProfileOcrConfig();
+            this.applyPatchConfigToForm(config);
+
+            // Supprimer l'indicateur de chargement
+            const indicator = document.getElementById('patchLoadingIndicator');
+            if (indicator) {
+                indicator.remove();
+            }
+
+            console.log('Dialogue Patch ouvert');
+            
+        } catch (error) {
+            console.error('Erreur lors de l\'ouverture du dialogue Patch:', error);
+            
+            const indicator = document.getElementById('patchLoadingIndicator');
+            if (indicator) {
+                indicator.remove();
+            }
+            
+            this.showNotification('Erreur lors du chargement des paramètres Patch: ' + error.message, 'warning');
         }
     }
 
-    async processPatch(e) {
-        e.preventDefault();
-
-        if (!this.importedFile) {
-            this.showNotification("Aucun fichier importé.", 'error');
-            return;
-        }
-
-        // Fermer la popup et afficher le loading
-        const patchPopup = document.getElementById("patchPopup");
-        const importZone = document.getElementById("importZone");
-        
-        if (patchPopup) patchPopup.style.display = "none";
-        if (importZone) importZone.innerHTML = `<p>🔄 Traitement Patch en cours...</p>`;
-
-        const formData = new FormData(e.target);
-        formData.append("file", this.importedFile);
-
-        // S'assurer que containsPatch est défini sur true pour le traitement patch
-        formData.set("containsPatch", "true");
-        const namingPattern = formData.get("namingPattern");
-        if (namingPattern) {
-            console.log("Pattern de nommage pour patch appliqué:", namingPattern);
-        }
-        
+    // ✅ NOUVELLE MÉTHODE : Extraction de la logique d'exécution Patch
+    async executePatchRequest(formData) {
         try {
             const response = await fetch(this.getPatchEndpoint(), {
                 method: "POST",
@@ -335,8 +650,50 @@ class OCRManager {
 
         } catch (err) {
             console.error("Erreur Patch :", err);
+            throw err; // Re-lancer pour gestion par la méthode appelante
+        }
+    }
+
+    // ✅ Méthode processPatch modifiée pour utiliser executePatchRequest avec patchMode
+    async processPatch(e) {
+        e.preventDefault();
+
+        if (!this.importedFile) {
+            this.showNotification("Aucun fichier importé.", 'error');
+            return;
+        }
+
+        // Fermer la popup et afficher le loading
+        const patchPopup = document.getElementById("patchPopup");
+        const importZone = document.getElementById("importZone");
+        
+        if (patchPopup) patchPopup.style.display = "none";
+        if (importZone) importZone.innerHTML = `<p>🔄 Traitement Patch en cours...</p>`;
+
+        const formData = new FormData(e.target);
+        formData.append("file", this.importedFile);
+
+        // S'assurer que containsPatch est défini sur true pour le traitement patch
+        formData.set("containsPatch", "true");
+        
+        // ✅ Validation du patchMode si présent
+        const patchMode = formData.get("patchMode");
+        if (patchMode && !this.isValidPatchMode(patchMode)) {
+            this.showNotification("Mode de traitement Patch invalide.", 'error');
+            return;
+        }
+        
+        try {
+            await this.executePatchRequest(formData);
+        } catch (err) {
             this.showProcessingError("Patch", err.message);
         }
+    }
+
+    // ✅ Nouvelle méthode pour valider le patchMode
+    isValidPatchMode(patchMode) {
+        const validModes = ['T_classique', 'T_with_bookmarks'];
+        return validModes.includes(patchMode);
     }
 
     // =================== GÉNÉRATION PATCH ===================
@@ -470,7 +827,7 @@ class OCRManager {
             importZone.appendChild(patchSection);
         });
 
-        // Gestion du toggle aperçu - Correction du sélecteur
+        // Gestion du toggle aperçu
         document.querySelectorAll(".preview-btn").forEach(btn => {
             btn.addEventListener("click", (e) => {
                 const patchIndex = btn.getAttribute('data-patch-index');
@@ -669,8 +1026,6 @@ class OCRManager {
     }
 
     async handleScanClick() {
-        // Cette fonction sera appelée par ProfileManager
-        // pour maintenir la séparation des responsabilités
         const selectedProfile = window.profileManager?.selectedProfile;
         
         if (!selectedProfile) {
@@ -711,10 +1066,8 @@ class OCRManager {
                 if (!data.success && data.error) {
                     throw new Error(data.error);
                 }
-                // Gérer la réponse JSON si nécessaire
                 this.showNotification("Scan terminé avec succès !", 'success');
             } else {
-                // Fichier unique en téléchargement direct
                 await this.handleSingleFile(response);
                 this.showNotification("Scan terminé et fichier disponible !", 'success');
             }
@@ -898,232 +1251,6 @@ class OCRManager {
         }
     }
 
-    // =================== MÉTHODES SUPPLÉMENTAIRES ===================
-    
-    // Sauvegarder les paramètres actuels dans un profil
-    async saveCurrentSettingsToProfile(profileName) {
-        try {
-            const ocrSettings = this.getCurrentOCRSettings();
-            const patchSettings = this.getCurrentPatchSettings();
-            
-            const profileData = {
-                name: profileName,
-                ocrSettings: ocrSettings,
-                patchSettings: patchSettings,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-            };
-
-            // Tenter de sauvegarder sur le serveur
-            try {
-                const response = await fetch(`http://localhost:3000/profiles/${profileName}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(profileData)
-                });
-                
-                if (response.ok) {
-                    this.showNotification(`Profil "${profileName}" sauvegardé sur le serveur`, 'success');
-                    return true;
-                }
-            } catch (serverError) {
-                console.log('Serveur non disponible, sauvegarde en local');
-            }
-
-            // Fallback vers localStorage
-            const savedProfiles = JSON.parse(localStorage.getItem('ocrProfiles') || '{}');
-            savedProfiles[profileName] = profileData;
-            localStorage.setItem('ocrProfiles', JSON.stringify(savedProfiles));
-            
-            this.showNotification(`Profil "${profileName}" sauvegardé localement`, 'success');
-            return true;
-
-        } catch (error) {
-            console.error('Erreur lors de la sauvegarde du profil:', error);
-            this.showNotification('Erreur lors de la sauvegarde du profil: ' + error.message, 'error');
-            return false;
-        }
-    }
-
-    getCurrentOCRSettings() {
-        const form = document.getElementById("ocrForm");
-        const settings = {};
-        
-        if (form) {
-            const formData = new FormData(form);
-            for (let [key, value] of formData.entries()) {
-                settings[key] = value;
-            }
-        }
-        
-        return settings;
-    }
-
-    getCurrentPatchSettings() {
-        const form = document.getElementById("patchForm");
-        const settings = {};
-        
-        if (form) {
-            const formData = new FormData(form);
-            for (let [key, value] of formData.entries()) {
-                settings[key] = value;
-            }
-        }
-        
-        return settings;
-    }
-
-    // Obtenir la liste des profils disponibles
-    async getAvailableProfiles() {
-        const profiles = [];
-
-        // Tenter de récupérer depuis le serveur
-        try {
-            const response = await fetch('http://localhost:3000/profiles');
-            if (response.ok) {
-                const serverProfiles = await response.json();
-                profiles.push(...serverProfiles);
-            }
-        } catch (error) {
-            console.log('Serveur non disponible pour les profils');
-        }
-
-        // Récupérer depuis localStorage
-        try {
-            const localProfiles = JSON.parse(localStorage.getItem('ocrProfiles') || '{}');
-            Object.keys(localProfiles).forEach(profileName => {
-                if (!profiles.find(p => p.name === profileName)) {
-                    profiles.push({
-                        name: profileName,
-                        source: 'local',
-                        ...localProfiles[profileName]
-                    });
-                }
-            });
-        } catch (error) {
-            console.error('Erreur lors de la lecture des profils locaux:', error);
-        }
-
-        return profiles;
-    }
-
-    // Valider les paramètres avant traitement
-    validateSettings(settings) {
-        const errors = [];
-
-        // Validation des paramètres OCR
-        if (settings.confidence && (settings.confidence < 0 || settings.confidence > 100)) {
-            errors.push('La confiance OCR doit être entre 0 et 100');
-        }
-
-        if (settings.dpi && (settings.dpi < 72 || settings.dpi > 600)) {
-            errors.push('La résolution DPI doit être entre 72 et 600');
-        }
-
-        // Validation des paramètres de patch
-        if (settings.namingPattern && !['barcode', 'sequence', 'timestamp'].includes(settings.namingPattern)) {
-            errors.push('Pattern de nommage invalide');
-        }
-
-        return {
-            isValid: errors.length === 0,
-            errors: errors
-        };
-    }
-
-    // Réinitialiser tous les paramètres aux valeurs par défaut
-    resetToDefaults() {
-        const defaultSettings = this.getDefaultProfileSettings();
-        this.applyOCRSettings(defaultSettings.ocrSettings);
-        this.applyPatchSettings(defaultSettings.patchSettings);
-        this.showNotification('Paramètres réinitialisés aux valeurs par défaut', 'info');
-    }
-
-    // Obtenir les statistiques d'utilisation
-    getUsageStats() {
-        const stats = JSON.parse(localStorage.getItem('ocrStats') || '{}');
-        return {
-            filesProcessed: stats.filesProcessed || 0,
-            ocrOperations: stats.ocrOperations || 0,
-            patchOperations: stats.patchOperations || 0,
-            scanOperations: stats.scanOperations || 0,
-            lastUsed: stats.lastUsed || null,
-            totalProcessingTime: stats.totalProcessingTime || 0
-        };
-    }
-
-    // Mettre à jour les statistiques
-    updateStats(operation, processingTime = 0) {
-        const stats = this.getUsageStats();
-        
-        stats[operation] = (stats[operation] || 0) + 1;
-        stats.lastUsed = new Date().toISOString();
-        stats.totalProcessingTime += processingTime;
-
-        localStorage.setItem('ocrStats', JSON.stringify(stats));
-    }
-
-    // Vérifier la santé du système
-    async checkSystemHealth() {
-        const health = {
-            server: false,
-            scanner: false,
-            localStorage: false,
-            errors: []
-        };
-
-        // Vérifier le serveur
-        try {
-            const response = await fetch('http://localhost:3000/health', { method: 'GET' });
-            health.server = response.ok;
-        } catch (error) {
-            health.errors.push('Serveur non accessible: ' + error.message);
-        }
-
-        // Vérifier localStorage
-        try {
-            localStorage.setItem('healthCheck', 'test');
-            localStorage.removeItem('healthCheck');
-            health.localStorage = true;
-        } catch (error) {
-            health.errors.push('LocalStorage non accessible: ' + error.message);
-        }
-
-        // Vérifier le scanner (si disponible)
-        try {
-            const scanResponse = await fetch('http://localhost:3000/scanner/status');
-            health.scanner = scanResponse.ok;
-        } catch (error) {
-            health.errors.push('Scanner non disponible: ' + error.message);
-        }
-
-        return health;
-    }
-
-    // Nettoyer les données obsolètes
-    cleanupOldData() {
-        try {
-            // Nettoyer les statistiques anciennes (plus de 30 jours)
-            const stats = this.getUsageStats();
-            if (stats.lastUsed) {
-                const lastUsedDate = new Date(stats.lastUsed);
-                const thirtyDaysAgo = new Date();
-                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-                
-                if (lastUsedDate < thirtyDaysAgo) {
-                    localStorage.removeItem('ocrStats');
-                    console.log('Statistiques anciennes nettoyées');
-                }
-            }
-
-            // Nettoyer les URLs blob orphelines
-            this.cleanup();
-            
-        } catch (error) {
-            console.error('Erreur lors du nettoyage:', error);
-        }
-    }
-
     // =================== ENDPOINTS ET CONFIGURATION ===================
     getOCREndpoint() {
         return "http://localhost:3000/processFile";
@@ -1136,15 +1263,16 @@ class OCRManager {
     getGeneratePatchEndpoint() {
         return "http://localhost:3000/patch/generatePatch";
     }
-
+    getscanEndpoint() {
+        return "http://localhost:3000/scanners";
+    }
     // =================== FONCTIONS UTILITAIRES ===================
     showNotification(message, type = 'info') {
-        // Utiliser Utils.showNotification si disponible, sinon console.log
         if (window.Utils && typeof window.Utils.showNotification === 'function') {
             window.Utils.showNotification(message, type);
         } else {
             console.log(`${type.toUpperCase()}: ${message}`);
-            alert(message); // Fallback basique
+            alert(message);
         }
     }
 
@@ -1201,6 +1329,8 @@ class OCRManager {
                 importZone.innerHTML = '<p>📂 Glissez-déposez un fichier ici ou utilisez les boutons ci-dessous</p>';
             }
         }
+
+        this.invalidateProfileConfigCache();
     }
 
     getImportedFile() {
@@ -1211,138 +1341,6 @@ class OCRManager {
         return this.importedFile !== null;
     }
 
-    // =================== FONCTIONS D'EXPORT/IMPORT ===================
-    exportOCRSettings() {
-        const form = document.getElementById("ocrForm");
-        if (!form) return;
-
-        const formData = new FormData(form);
-        const settings = {};
-        
-        for (let [key, value] of formData.entries()) {
-            settings[key] = value;
-        }
-
-        const dataStr = JSON.stringify(settings, null, 2);
-        const dataBlob = new Blob([dataStr], { type: 'application/json' });
-        
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(dataBlob);
-        link.download = 'ocr-settings.json';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        this.showNotification('Paramètres OCR exportés avec succès !', 'success');
-    }
-
-    exportPatchSettings() {
-        const form = document.getElementById("patchForm");
-        if (!form) return;
-
-        const formData = new FormData(form);
-        const settings = {};
-        
-        for (let [key, value] of formData.entries()) {
-            settings[key] = value;
-        }
-
-        const dataStr = JSON.stringify(settings, null, 2);
-        const dataBlob = new Blob([dataStr], { type: 'application/json' });
-        
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(dataBlob);
-        link.download = 'patch-settings.json';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        this.showNotification('Paramètres Patch exportés avec succès !', 'success');
-    }
-
-    importOCRSettings() {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
-        
-        input.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                try {
-                    const settings = JSON.parse(event.target.result);
-                    this.applyOCRSettings(settings);
-                    this.showNotification('Paramètres OCR importés avec succès !', 'success');
-                } catch (err) {
-                    this.showNotification('Erreur lors de l\'import des paramètres : ' + err.message, 'error');
-                }
-            };
-            reader.readAsText(file);
-        });
-        
-        input.click();
-    }
-
-    importPatchSettings() {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
-        
-        input.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                try {
-                    const settings = JSON.parse(event.target.result);
-                    this.applyPatchSettings(settings);
-                    this.showNotification('Paramètres Patch importés avec succès !', 'success');
-                } catch (err) {
-                    this.showNotification('Erreur lors de l\'import des paramètres : ' + err.message, 'error');
-                }
-            };
-            reader.readAsText(file);
-        });
-        
-        input.click();
-    }
-
-    applyOCRSettings(settings) {
-        const form = document.getElementById("ocrForm");
-        if (!form) return;
-
-        Object.entries(settings).forEach(([key, value]) => {
-            const field = form.querySelector(`[name="${key}"]`);
-            if (field) {
-                if (field.type === 'checkbox') {
-                    field.checked = value === 'true' || value === true;
-                } else {
-                    field.value = value;
-                }
-            }
-        });
-    }
-
-    applyPatchSettings(settings) {
-        const form = document.getElementById("patchForm");
-        if (!form) return;
-
-        Object.entries(settings).forEach(([key, value]) => {
-            const field = form.querySelector(`[name="${key}"]`);
-            if (field) {
-                if (field.type === 'checkbox') {
-                    field.checked = value === 'true' || value === true;
-                } else {
-                    field.value = value;
-                }
-            }
-        });
-    }
-
-    // =================== FONCTIONS DE NETTOYAGE ===================
     cleanup() {
         // Nettoyer les URLs d'objets créées
         const iframes = document.querySelectorAll('iframe');
@@ -1352,11 +1350,61 @@ class OCRManager {
             }
         });
 
-        // Nettoyer les liens de téléchargement
         const links = document.querySelectorAll('a[href^="blob:"]');
         links.forEach(link => {
             URL.revokeObjectURL(link.href);
         });
+    }
+
+    // =================== MÉTHODES DE CACHE ET OPTIMISATION ===================
+    
+    invalidateProfileConfigCache() {
+        this.cachedProfileConfig = null;
+        console.log('Cache de configuration profil invalidé');
+    }
+
+    setupProfileChangeListener() {
+        if (window.profileManager) {
+            const originalSelectProfile = window.profileManager.selectProfile;
+            
+            window.profileManager.selectProfile = (...args) => {
+                const result = originalSelectProfile.apply(window.profileManager, args);
+                this.invalidateProfileConfigCache();
+                console.log('Profil sélectionné changé, cache invalidé');
+                return result;
+            };
+        }
+    }
+
+    async debugProfileConfig() {
+        console.log('=== DEBUG CONFIGURATION PROFIL ===');
+        
+        if (!window.profileManager || !window.profileManager.selectedProfile) {
+            console.log('❌ Aucun profil sélectionné');
+            return;
+        }
+
+        const profileName = window.profileManager.selectedProfile;
+        console.log(`📋 Profil sélectionné: ${profileName}`);
+        
+        try {
+            const config = await this.getSelectedProfileOcrConfig();
+            console.log('✅ Configuration récupérée:', config);
+            
+            console.log('🔧 Test création FormData...');
+            
+            // Tester la création des FormData
+            const ocrFormData = this.createOcrFormDataFromConfig(config);
+            const patchFormData = this.createPatchFormDataFromConfig(config);
+            
+            console.log('✅ FormData OCR créé');
+            console.log('✅ FormData Patch créé avec patchMode:', config.patchMode);
+            
+        } catch (error) {
+            console.error('❌ Erreur:', error);
+        }
+        
+        console.log('===================================');
     }
 
     // =================== EXPOSER LES FONCTIONS GLOBALEMENT ===================
@@ -1377,6 +1425,69 @@ class OCRManager {
             if (generatePatchPopup) generatePatchPopup.style.display = "none";
         };
         
+        // Nouvelles fonctions de debug globales
+        window.debugOCRProfileConfig = () => this.debugProfileConfig();
+        window.testOCRConfigRecovery = async () => {
+            console.log('=== TEST RÉCUPÉRATION CONFIGURATION ===');
+            
+            if (!window.profileManager?.selectedProfile) {
+                console.log('❌ Aucun profil sélectionné');
+                return;
+            }
+
+            console.log('🔧 Test récupération configuration...');
+            const config = await this.getSelectedProfileOcrConfig();
+            console.log('✅ Configuration récupérée:', config);
+            console.log('✅ PatchMode:', config.patchMode);
+            
+            // Test application
+            console.log('🔧 Test application aux formulaires...');
+            this.applyOcrConfigToForm(config);
+            this.applyPatchConfigToForm(config);
+            console.log('✅ Configuration appliquée aux formulaires');
+            
+            console.log('=========================================');
+            return config;
+        };
+
+        // Nouvelles fonctions pour tester l'exécution directe
+        window.testDirectOCR = async () => {
+            console.log('=== TEST EXÉCUTION DIRECTE OCR ===');
+            if (!this.importedFile) {
+                console.log('❌ Aucun fichier importé');
+                return;
+            }
+            const result = await this.checkProfileAndExecuteOcr();
+            console.log('Résultat:', result ? 'Exécuté directement' : 'Popup nécessaire');
+            console.log('==================================');
+            return result;
+        };
+
+        window.testDirectPatch = async () => {
+            console.log('=== TEST EXÉCUTION DIRECTE PATCH ===');
+            if (!this.importedFile) {
+                console.log('❌ Aucun fichier importé');
+                return;
+            }
+            const result = await this.checkProfileAndExecutePatch();
+            console.log('Résultat:', result ? 'Exécuté directement' : 'Popup nécessaire');
+            console.log('====================================');
+            return result;
+        };
+
+        // ✅ Nouvelle fonction pour tester la validation du patchMode
+        window.testPatchModeValidation = () => {
+            console.log('=== TEST VALIDATION PATCHMODE ===');
+            const testModes = ['T_classique', 'T_with_bookmarks', 'invalid_mode', ''];
+            
+            testModes.forEach(mode => {
+                const isValid = this.isValidPatchMode(mode);
+                console.log(`Mode "${mode}": ${isValid ? '✅ Valide' : '❌ Invalide'}`);
+            });
+            
+            console.log('=================================');
+        };
+
         // Exposer l'instance pour usage global
         window.ocrManager = this;
     }
@@ -1389,43 +1500,14 @@ class OCRManager {
             importedFileSize: this.importedFile?.size || null,
             importedFileType: this.importedFile?.type || null,
             selectedProfile: window.profileManager?.selectedProfile || null,
-            stats: this.getUsageStats(),
-            timestamp: new Date().toISOString()
-        };
-    }
-
-    logDebugInfo() {
-        console.log('OCRManager Debug Info:', this.getDebugInfo());
-    }
-
-    async generateDiagnosticReport() {
-        const report = {
+            cachedConfig: this.cachedProfileConfig,
+            profileManagerAvailable: !!window.profileManager,
             timestamp: new Date().toISOString(),
-            debugInfo: this.getDebugInfo(),
-            systemHealth: await this.checkSystemHealth(),
-            profiles: await this.getAvailableProfiles(),
-            browserInfo: {
-                userAgent: navigator.userAgent,
-                language: navigator.language,
-                platform: navigator.platform,
-                cookieEnabled: navigator.cookieEnabled,
-                onLine: navigator.onLine
-            }
+            // Nouvelles informations de debug
+            canExecuteDirectOCR: !!window.profileManager?.selectedProfile && this.hasImportedFile(),
+            canExecuteDirectPatch: !!window.profileManager?.selectedProfile && this.hasImportedFile(),
+            // ✅ Information sur le patchMode du cache
+            cachedPatchMode: this.cachedProfileConfig?.config?.patchMode || null
         };
-
-        // Créer un fichier de diagnostic
-        const reportStr = JSON.stringify(report, null, 2);
-        const blob = new Blob([reportStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `ocr-diagnostic-${Date.now()}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-
-        return report;
     }
 }

@@ -25,7 +25,7 @@ class OcrConfigController {
         return path.join(this.configDirectory, `${cleanName}.xml`);
     }
 
-    createOcrConfigXml(config) {
+createOcrConfigXml(config) {
     const now = new Date().toISOString();
     
     const xmlContent = `<?xml version="1.0" encoding="utf-8"?>
@@ -38,8 +38,9 @@ class OcrConfigController {
             <PdfMode>${this.escapeXml(config.pdfMode || 'pdfa')}</PdfMode>
         </Settings>
         <PatchSettings>
-            <PatchMode>${config.patchMode || false}</PatchMode>
+            <PatchType>${this.escapeXml(config.patchType || 'T_classique')}</PatchType>
             <PatchNaming>${this.escapeXml(config.patchNaming || 'barcode_ocr_generic')}</PatchNaming>
+            <PatchEnabled>${config.patchEnabled || false}</PatchEnabled>
         </PatchSettings>
         <Advanced>
             <AutoDetectLanguage>${!config.lang || config.lang === ''}</AutoDetectLanguage>
@@ -79,17 +80,20 @@ parseOcrConfigXml(xmlContent) {
             lastModified: metadata.getElementsByTagName('LastModified')[0].textContent
         };
 
-        // ✅ Ajouter les champs Patch s'ils existent
+        // ✅ Lire les champs Patch avec PatchType
         if (patchSettings) {
-            const patchModeElement = patchSettings.getElementsByTagName('PatchMode')[0];
+            const patchTypeElement = patchSettings.getElementsByTagName('PatchType')[0];
             const patchNamingElement = patchSettings.getElementsByTagName('PatchNaming')[0];
+            const patchEnabledElement = patchSettings.getElementsByTagName('PatchEnabled')[0];
             
-            result.patchMode = patchModeElement ? patchModeElement.textContent === 'true' : false;
+            result.patchType = patchTypeElement ? patchTypeElement.textContent : 'T_classique';  // ✅ patchType
             result.patchNaming = patchNamingElement ? patchNamingElement.textContent : 'barcode_ocr_generic';
+            result.patchEnabled = patchEnabledElement ? patchEnabledElement.textContent === 'true' : false;
         } else {
-            // Valeurs par défaut si la section n'existe pas (rétrocompatibilité)
-            result.patchMode = false;
+            // Valeurs par défaut si la section n'existe pas
+            result.patchType = 'T_classique';  // ✅ patchType
             result.patchNaming = 'barcode_ocr_generic';
+            result.patchEnabled = false;
         }
 
         return result;
@@ -111,7 +115,7 @@ parseOcrConfigXml(xmlContent) {
     }
 
     // Route POST - Sauvegarder la configuration OCR
-    async saveOcrConfig(req, res) {
+ async saveOcrConfig(req, res) {
     try {
         const config = req.body;
         
@@ -121,18 +125,25 @@ parseOcrConfigXml(xmlContent) {
             });
         }
 
-        // ✅ Validation des nouveaux champs Patch
+        // ✅ CORRECTION: Valider patchType au lieu de patchMode
+        if (config.patchType && !this.isValidPatchType(config.patchType)) {
+            return res.status(400).json({
+                error: 'Mode de traitement Patch invalide. Valeurs autorisées: T_classique, T_with_bookmarks'
+            });
+        }
+
         if (config.patchNaming && !this.isValidPatchNaming(config.patchNaming)) {
             return res.status(400).json({
                 error: 'Stratégie de nommage Patch invalide. Valeurs autorisées: barcode_ocr_generic, barcode, ocr, generic'
             });
         }
 
-        // Valeurs par défaut pour les nouveaux champs
+        // ✅ Valeurs par défaut pour les champs (utiliser patchType)
         const configWithDefaults = {
             ...config,
-            patchMode: config.patchMode || false,
-            patchNaming: config.patchNaming || 'barcode_ocr_generic'
+            patchType: config.patchType || 'T_classique',  // ✅ patchType au lieu de patchMode
+            patchNaming: config.patchNaming || 'barcode_ocr_generic',
+            patchEnabled: config.patchEnabled || false
         };
 
         const filePath = this.getConfigFilePath(config.profileName);
@@ -141,14 +152,15 @@ parseOcrConfigXml(xmlContent) {
         await fs.writeFile(filePath, xmlContent, 'utf8');
         
         console.log(`Configuration OCR sauvegardée pour le profil: ${config.profileName}`);
-        console.log(`Patch Mode: ${configWithDefaults.patchMode}, Patch Naming: ${configWithDefaults.patchNaming}`);
+        console.log(`Patch Type: ${configWithDefaults.patchType}, Patch Naming: ${configWithDefaults.patchNaming}, Patch Enabled: ${configWithDefaults.patchEnabled}`);
         
         res.json({ 
             success: true, 
             message: 'Configuration OCR sauvegardée avec succès',
             filePath: filePath,
-            patchMode: configWithDefaults.patchMode,
-            patchNaming: configWithDefaults.patchNaming
+            patchType: configWithDefaults.patchType,  // ✅ Retourner patchType
+            patchNaming: configWithDefaults.patchNaming,
+            patchEnabled: configWithDefaults.patchEnabled
         });
 
     } catch (error) {
@@ -160,7 +172,12 @@ parseOcrConfigXml(xmlContent) {
     }
 }
 
-// ✅ Nouvelle méthode de validation pour les stratégies de nommage Patch
+// ✅ Nouvelles méthodes de validation pour les modes et stratégies
+isValidPatchType(patchType) {  // Au lieu de isValidPatchMode
+    const validTypes = ['T_classique', 'T_with_bookmarks'];
+    return validTypes.includes(patchType);
+}
+
 isValidPatchNaming(patchNaming) {
     const validStrategies = [
         'barcode_ocr_generic',
@@ -171,7 +188,35 @@ isValidPatchNaming(patchNaming) {
     return validStrategies.includes(patchNaming);
 }
 
-// ✅ Nouvelle route pour obtenir les stratégies de nommage disponibles
+// ✅ Nouvelles routes pour obtenir les modes et stratégies disponibles
+async getPatchModes(req, res) {
+    try {
+        const modes = [
+            {
+                value: 'T_classique',
+                label: '⚡ Traitement classique (Standard)',
+                description: 'Traitement standard sans fonctionnalités avancées'
+            },
+            {
+                value: 'T_with_bookmarks',
+                label: '🔖 Traitement avec signets automatiques',
+                description: 'Traitement avancé avec création automatique de signets'
+            }
+        ];
+
+        res.json({
+            success: true,
+            modes: modes
+        });
+    } catch (error) {
+        console.error('Erreur lors de la récupération des modes de traitement:', error);
+        res.status(500).json({
+            error: 'Erreur interne du serveur',
+            details: error.message
+        });
+    }
+}
+
 async getPatchNamingStrategies(req, res) {
     try {
         const strategies = [
@@ -210,7 +255,7 @@ async getPatchNamingStrategies(req, res) {
     }
 }
 
-// ✅ Méthode pour migrer les anciens fichiers sans section PatchSettings
+// ✅ Méthode pour migrer les anciens fichiers sans section PatchSettings mise à jour
 async migrateLegacyConfig(filePath) {
     try {
         const xmlContent = await fs.readFile(filePath, 'utf8');
@@ -219,41 +264,69 @@ async migrateLegacyConfig(filePath) {
         
         // Vérifier si PatchSettings existe déjà
         const patchSettings = xmlDoc.getElementsByTagName('PatchSettings')[0];
-        if (patchSettings) {
-            return false; // Pas besoin de migration
+        let needsMigration = false;
+
+        if (!patchSettings) {
+            needsMigration = true;
+            // Ajouter la section PatchSettings complète
+            const profile = xmlDoc.getElementsByTagName('Profile')[0];
+            const advanced = xmlDoc.getElementsByTagName('Advanced')[0];
+            
+            const patchSettingsElement = xmlDoc.createElement('PatchSettings');
+            
+            const patchModeElement = xmlDoc.createElement('PatchMode');
+            patchModeElement.textContent = 'T_classique';
+            patchSettingsElement.appendChild(patchModeElement);
+            
+            const patchNamingElement = xmlDoc.createElement('PatchNaming');
+            patchNamingElement.textContent = 'barcode_ocr_generic';
+            patchSettingsElement.appendChild(patchNamingElement);
+
+            const patchEnabledElement = xmlDoc.createElement('PatchEnabled');
+            patchEnabledElement.textContent = 'false';
+            patchSettingsElement.appendChild(patchEnabledElement);
+            
+            // Insérer avant Advanced
+            profile.insertBefore(patchSettingsElement, advanced);
+        } else {
+            // Vérifier et migrer les éléments manquants
+            if (!patchSettings.getElementsByTagName('PatchEnabled')[0]) {
+                needsMigration = true;
+                const patchEnabledElement = xmlDoc.createElement('PatchEnabled');
+                patchEnabledElement.textContent = 'false';
+                patchSettings.appendChild(patchEnabledElement);
+            }
+
+            // Migrer l'ancien format de PatchMode si nécessaire
+            const patchModeElement = patchSettings.getElementsByTagName('PatchMode')[0];
+            if (patchModeElement) {
+                const currentValue = patchModeElement.textContent;
+                if (currentValue === 'true' || currentValue === 'false') {
+                    needsMigration = true;
+                    patchModeElement.textContent = currentValue === 'true' ? 'T_with_bookmarks' : 'T_classique';
+                    console.log(`PatchMode migré de ${currentValue} vers ${patchModeElement.textContent}`);
+                }
+            }
         }
 
-        // Ajouter la section PatchSettings
-        const profile = xmlDoc.getElementsByTagName('Profile')[0];
-        const advanced = xmlDoc.getElementsByTagName('Advanced')[0];
-        
-        const patchSettingsElement = xmlDoc.createElement('PatchSettings');
-        
-        const patchModeElement = xmlDoc.createElement('PatchMode');
-        patchModeElement.textContent = 'false';
-        patchSettingsElement.appendChild(patchModeElement);
-        
-        const patchNamingElement = xmlDoc.createElement('PatchNaming');
-        patchNamingElement.textContent = 'barcode_ocr_generic';
-        patchSettingsElement.appendChild(patchNamingElement);
-        
-        // Insérer avant Advanced
-        profile.insertBefore(patchSettingsElement, advanced);
-        
-        // Mettre à jour LastModified
-        const metadata = xmlDoc.getElementsByTagName('Metadata')[0];
-        const lastModified = metadata.getElementsByTagName('LastModified')[0];
-        if (lastModified) {
-            lastModified.textContent = new Date().toISOString();
+        if (needsMigration) {
+            // Mettre à jour LastModified
+            const metadata = xmlDoc.getElementsByTagName('Metadata')[0];
+            const lastModified = metadata.getElementsByTagName('LastModified')[0];
+            if (lastModified) {
+                lastModified.textContent = new Date().toISOString();
+            }
+            
+            // Sauvegarder le fichier migré
+            const serializer = new XMLSerializer();
+            const migratedXml = serializer.serializeToString(xmlDoc);
+            await fs.writeFile(filePath, migratedXml, 'utf8');
+            
+            console.log(`Configuration OCR migrée: ${filePath}`);
+            return true;
         }
         
-        // Sauvegarder le fichier migré
-        const serializer = new XMLSerializer();
-        const migratedXml = serializer.serializeToString(xmlDoc);
-        await fs.writeFile(filePath, migratedXml, 'utf8');
-        
-        console.log(`Configuration OCR migrée: ${filePath}`);
-        return true;
+        return false; // Pas besoin de migration
         
     } catch (error) {
         console.error(`Erreur migration configuration OCR ${filePath}:`, error);
@@ -372,22 +445,7 @@ async migrateLegacyConfig(filePath) {
             return false;
         }
     }
-
-    // Créer le routeur Express
-    createRouter() {
-        const router = express.Router();
-
-        // Middleware pour parser JSON
-        router.use(express.json());
-
-        // Routes
-        router.post('/', this.saveOcrConfig.bind(this));
-        router.get('/:profileName', this.getOcrConfig.bind(this));
-        router.delete('/:profileName', this.deleteOcrConfig.bind(this));
-        router.get('/', this.getAllOcrConfigs.bind(this));
-
-        return router;
-    }
+    
 }
 
 module.exports = OcrConfigController;

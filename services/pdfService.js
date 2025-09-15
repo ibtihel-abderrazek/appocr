@@ -14,14 +14,21 @@ exports.extractText = async (filePath) => {
     return "";
   }
 };
+
 exports.getPageCount = async (pdfPath) => {
-  const fileBuffer = fs.readFileSync(pdfPath);
-  const pdfDoc = await PDFDocument.load(fileBuffer); // <-- charge le PDF
-  return pdfDoc.getPageCount(); // maintenant ok
+  try {
+    const fileBuffer = fs.readFileSync(pdfPath);
+    const pdfDoc = await PDFDocument.load(fileBuffer, { updateMetadata: false }); // <-- ignore métadonnées
+    return pdfDoc.getPageCount();
+  } catch (err) {
+    console.error("❌ Erreur getPageCount PDF :", err);
+    return 0;
+  }
 };
+
 exports.splitIntoBlocks = async (pdfPath, blockSize = 10, outputDir) => {
   const fileBuffer = fs.readFileSync(pdfPath);
-  const pdfDoc = await PDFDocument.load(fileBuffer);
+  const pdfDoc = await PDFDocument.load(fileBuffer, { updateMetadata: false }); // <-- ignore métadonnées
   const totalPages = pdfDoc.getPageCount();
   const blocks = [];
 
@@ -35,9 +42,14 @@ exports.splitIntoBlocks = async (pdfPath, blockSize = 10, outputDir) => {
       outputDir,
       `${path.basename(pdfPath, ".pdf")}_part${i / blockSize + 1}.pdf`
     );
-    const pdfBytes = await newPdf.save();
-    fs.writeFileSync(outputPath, pdfBytes);
-    blocks.push(outputPath);
+
+    try {
+      const pdfBytes = await newPdf.save();
+      fs.writeFileSync(outputPath, pdfBytes);
+      blocks.push(outputPath);
+    } catch (err) {
+      console.error("❌ Erreur sauvegarde PDF partielle :", outputPath, err);
+    }
   }
 
   return blocks;

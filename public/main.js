@@ -286,19 +286,51 @@ class FormManager {
 }
 
 // =================== GESTION OCR AVEC SUPPORT PATCH ===================
+
+
 class OcrConfigManager {
     static async saveConfig(profileName, ocrData) {
         try {
-            const config = {
-                profileName: profileName,
-                ocrMode: ocrData.OcrMode || false,
-                lang: ocrData.OcrLang || 'fra',
-                namingPattern: ocrData.OcrNamingPattern || '$(DD)-$(MM)-$(YYYY)-$(n)',
-                pdfMode: ocrData.OcrPdfMode || 'pdfa',
-                // ✅ Nouveaux champs Patch ajoutés
-                patchMode: ocrData.OcrPatchMode || false,
-                patchNaming: ocrData.OcrPatchNaming || 'barcode_ocr_generic'
-            };
+            // Gérer les deux formats possibles : objet direct ou données séparées
+            let config;
+            
+            if (ocrData.profileName) {
+                // Format déjà préparé par ProfileManager
+                config = ocrData;
+            } else {
+                // Format des données brutes du formulaire - les convertir
+                config = {
+                    profileName: profileName,
+                    ocrMode: ocrData.OcrMode === true || ocrData.OcrMode === 'true' || false,
+                    lang: ocrData.OcrLang || 'fra',
+                    namingPattern: ocrData.OcrNamingPattern || '$(DD)-$(MM)-$(YYYY)-$(n)',
+                    pdfMode: ocrData.OcrPdfMode || 'pdfa',
+                    patchEnabled: ocrData.OcrPatchMode === true || ocrData.OcrPatchMode === 'true' || false,
+                    patchNaming: ocrData.OcrPatchNaming || 'barcode_ocr_generic'
+                };
+                
+                // ✅ CORRECTION PRINCIPALE : Mapper PatchMode vers patchType (nom attendu par le serveur)
+                if (ocrData.PatchMode) {
+                    // Validation des valeurs autorisées
+                    const validPatchTypes = ['T_classique', 'T_with_bookmarks'];
+                    const patchType = ocrData.PatchMode;
+                    
+                    if (validPatchTypes.includes(patchType)) {
+                        config.patchType = patchType;  // ✅ Utiliser patchType au lieu de patchMode
+                    } else {
+                        console.warn(`PatchMode invalide: "${patchType}", utilisation de T_classique par défaut`);
+                        config.patchType = 'T_classique';
+                    }
+                } else {
+                    config.patchType = 'T_classique'; // Valeur par défaut
+                }
+            }
+
+            console.log('=== DEBUG OcrConfigManager.saveConfig ===');
+            console.log('profileName:', profileName);
+            console.log('ocrData reçu:', ocrData);
+            console.log('config à envoyer:', config);
+            console.log('=========================================');
 
             const response = await ApiService.saveOcrConfig(config);
             console.log('Configuration OCR sauvegardée:', response);
@@ -317,9 +349,9 @@ class OcrConfigManager {
                 OcrLang: config.lang,
                 OcrNamingPattern: config.namingPattern,
                 OcrPdfMode: config.pdfMode,
-                // ✅ Nouveaux champs Patch ajoutés
-                OcrPatchMode: config.patchMode,
-                OcrPatchNaming: config.patchNaming
+                OcrPatchMode: config.patchEnabled,  // ✅ Mapper patchEnabled vers OcrPatchMode
+                OcrPatchNaming: config.patchNaming,
+                PatchMode: config.patchType || config.patchMode  // ✅ Mapper patchType/patchMode vers PatchMode
             };
         } catch (error) {
             console.warn('Aucune configuration OCR trouvée pour', profileName);
@@ -336,7 +368,6 @@ class OcrConfigManager {
         }
     }
 
-    // ✅ Nouvelle méthode pour obtenir les stratégies de nommage Patch
     static async getPatchStrategies() {
         try {
             const response = await fetch('/api/profile/ocr/patch/strategies');
@@ -344,7 +375,6 @@ class OcrConfigManager {
                 const data = await response.json();
                 return data.strategies;
             } else {
-                // Fallback avec stratégies par défaut
                 return this.getDefaultPatchStrategies();
             }
         } catch (error) {
@@ -353,7 +383,6 @@ class OcrConfigManager {
         }
     }
 
-    // ✅ Méthode pour obtenir les stratégies par défaut
     static getDefaultPatchStrategies() {
         return [
             {
@@ -379,12 +408,10 @@ class OcrConfigManager {
         ];
     }
 
-    // ✅ Méthode pour valider une configuration OCR incluant Patch
     static validateOcrConfig(config) {
         const errors = [];
         const warnings = [];
 
-        // Validation des champs OCR existants
         if (config.OcrLang && !['', 'fra', 'eng', 'ara'].includes(config.OcrLang)) {
             warnings.push(`Langue OCR "${config.OcrLang}" non standard`);
         }
@@ -393,9 +420,13 @@ class OcrConfigManager {
             errors.push(`Mode PDF "${config.OcrPdfMode}" invalide`);
         }
 
-        // ✅ Validation des nouveaux champs Patch
         if (config.OcrPatchNaming && !this.isValidPatchStrategy(config.OcrPatchNaming)) {
             errors.push(`Stratégie Patch "${config.OcrPatchNaming}" invalide`);
+        }
+
+        // ✅ Validation du champ PatchMode (qui devient patchType côté serveur)
+        if (config.PatchMode && !['T_classique', 'T_with_bookmarks'].includes(config.PatchMode)) {
+            errors.push(`Mode de traitement Patch "${config.PatchMode}" invalide. Valeurs autorisées: T_classique, T_with_bookmarks`);
         }
 
         if (config.OcrPatchMode === true && !config.OcrPatchNaming) {
@@ -409,13 +440,11 @@ class OcrConfigManager {
         };
     }
 
-    // ✅ Méthode pour valider une stratégie Patch
     static isValidPatchStrategy(strategy) {
         const validStrategies = ['barcode_ocr_generic', 'barcode', 'ocr', 'generic'];
         return validStrategies.includes(strategy);
     }
 
-    // ✅ Méthode pour créer une configuration OCR par défaut avec Patch
     static createDefaultConfig(profileName) {
         return {
             profileName: profileName,
@@ -423,28 +452,31 @@ class OcrConfigManager {
             lang: 'fra',
             namingPattern: '$(DD)-$(MM)-$(YYYY)-$(n)',
             pdfMode: 'pdfa',
-            patchMode: false,
-            patchNaming: 'barcode_ocr_generic'
+            patchEnabled: false,
+            patchNaming: 'barcode_ocr_generic',
+            patchType: 'T_classique'  // ✅ Utiliser patchType au lieu de patchMode
         };
     }
 
-    // ✅ Méthode pour migrer une ancienne configuration
     static migrateConfig(oldConfig) {
         const migratedConfig = { ...oldConfig };
         
-        // Ajouter les champs Patch s'ils n'existent pas
-        if (!migratedConfig.hasOwnProperty('patchMode')) {
-            migratedConfig.patchMode = false;
+        if (!migratedConfig.hasOwnProperty('patchEnabled')) {
+            migratedConfig.patchEnabled = false;
         }
         
         if (!migratedConfig.hasOwnProperty('patchNaming')) {
             migratedConfig.patchNaming = 'barcode_ocr_generic';
         }
         
+        // ✅ Migration du champ patchType (au lieu de patchMode)
+        if (!migratedConfig.hasOwnProperty('patchType')) {
+            migratedConfig.patchType = 'T_classique';
+        }
+        
         return migratedConfig;
     }
 }
-
 // =================== APPLICATION PRINCIPALE AVEC SUPPORT PATCH ===================
 class ScannerProfileApp {
     constructor() {
@@ -767,7 +799,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Vérifier la connexion serveur
         const serverConnected = await app.checkServerConnection();
         if (!serverConnected) {
-            Utils.showNotification('Attention: Serveur non accessible, fonctionnalités limitées', 'warning');
+            
         }
         
         await app.init();
