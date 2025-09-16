@@ -2,7 +2,7 @@
 const fs = require("fs");
 const path = require("path");
 const { PDFDocument } = require("pdf-lib");
-const { getProfileByDisplayName } = require("../services/xmlProfileService");
+const { getDriverNameByProfile } = require("../services/xmlProfileService");
 const { execFile, exec } = require("child_process");
 const sharp = require("sharp");
 
@@ -56,14 +56,6 @@ class ScanService {
             // Retourner des scanners par défaut en cas d'erreur
             const fallbackData = {
                 success: false,
-                scanners: [
-                    {
-                        id: 'TWAIN2 FreeImage Software Scanner',
-                        name: 'TWAIN2 FreeImage Software Scanner',
-                        driver: 'TWAIN',
-                        displayName: 'TWAIN2 FreeImage Software Scanner (TWAIN)'
-                    }
-                ],
                 count: 1,
                 error: error.message,
                 isFallback: true
@@ -324,7 +316,7 @@ class ScanService {
             throw error;
         }
     }
-
+    
     /**
      * Fonction principale de scan avec gestion robuste des erreurs
      */
@@ -335,18 +327,18 @@ class ScanService {
 
         // Construire le nom du fichier PDF
         const outputFile = path.join(outputDir, `${profileName}_scan_temp.pdf`);
-
+        const driver = await getDriverNameByProfile(profileName);
         // Commande NAPS2 sans options invalides
         const command = `"${path.join(__dirname, '../bin/naps2/App/NAPS2.Console.exe')}" ` +
             `--driver twain ` +
-            `--device "PaperStream IP fi-7140" ` +
+            `--device "${driver}" ` +
             `--profile "${profileName}" ` +
             `--output "${outputFile}" ` +
             `--force ` +
             `-v`;  // verbose
 
         console.log("Exécution NAPS2:", command);
-
+        console.log("driver",driver);
         await new Promise((resolve, reject) => {
             exec(command, (error, stdout, stderr) => {
                 console.log("STDOUT:", stdout);

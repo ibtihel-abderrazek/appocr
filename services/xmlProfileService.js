@@ -313,7 +313,13 @@ async function restoreProfile(backupFileName) {
 
   return backupContent.originalName;
 }
-
+async function getDriverNameByProfile(displayName) {
+  const profile = await getProfileByDisplayName(displayName);
+  if (!profile) {
+    throw new Error(`Profil "${displayName}" non trouvé`);
+  }
+  return profile.Device?.[0]?.ID?.[0] || null;
+}
 // --- EXPORTS ---
 module.exports = {
   addProfile,
@@ -323,4 +329,5 @@ module.exports = {
   deleteProfileByDisplayName,
   getDeletedProfiles,
   restoreProfile,
-};
+  getDriverNameByProfile,
+}
