@@ -341,15 +341,11 @@ class ProfileManager {
                 this.scanners = data.scanners || [];
             } else {
                 console.warn('Impossible de charger la liste des scanners');
-                this.scanners = [
-                    { id: 'TWAIN2 FreeImage Software Scanner', name: 'TWAIN2 FreeImage Software Scanner' },
-                ];
+                
             }
         } catch (error) {
             console.warn('Erreur lors du chargement des scanners:', error);
-            this.scanners = [
-                { id: 'TWAIN2 FreeImage Software Scanner', name: 'TWAIN2 FreeImage Software Scanner' },
-            ];
+            
         }
     }
 

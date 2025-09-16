@@ -103,6 +103,8 @@ class OCRManager {
 
     // =================== MÉTHODES DE RÉCUPÉRATION DES PARAMÈTRES PROFIL ===================
 
+// =================== MÉTHODES DE RÉCUPÉRATION DES PARAMÈTRES PROFIL ===================
+
     async getSelectedProfileOcrConfig() {
         try {
             // Vérifier qu'un profil est sélectionné
@@ -157,15 +159,15 @@ class OCRManager {
                     removeNoise: 'false',
                     autoRotate: 'true',
                     
-                    // Paramètres spécifiques à l'OCR
-                    ocrMode: data.ocrMode || false,
+                    // ✅ Paramètres spécifiques à l'OCR avec vérification enable
+                    ocrMode: data.ocrMode || false, // Utiliser directement la valeur de l'API
                     namingPattern: data.namingPattern || '$(DD)-$(MM)-$(YYYY)-$(n)',
                     pdfMode: data.pdfMode || 'pdfa',
                     
-                    // ✅ Paramètres Patch avec le nouveau patchMode
+                    // ✅ Paramètres Patch avec vérification enable
                     patchMode: data.patchType|| 'T_classique',
                     patchNaming: data.patchNaming || 'barcode_ocr_generic',
-                    patchEnabled: data.patchEnabled || false,
+                    patchEnabled: data.patchEnabled || false, // Utiliser directement la valeur de l'API
                     splitByBarcode: data.patchEnabled ? 'true' : 'false',
                     barcodePosition: 'top-right',
                     outputFormat: 'pdf',
@@ -305,7 +307,107 @@ class OCRManager {
 
     // =================== NOUVELLES MÉTHODES POUR EXÉCUTION DIRECTE ===================
 
-    // ✅ NOUVELLE MÉTHODE : Créer FormData à partir de la configuration du profil
+    // ✅ MÉTHODE MODIFIÉE : Vérifier si OCR est activé et exécuter ou ouvrir popup
+    async checkProfileAndExecuteOcr() {
+        // Vérifier qu'un fichier est importé
+        if (!this.importedFile) {
+            this.showNotification("Veuillez importer un fichier avant de lancer l'OCR.", 'warning');
+            return false;
+        }
+
+        // ✅ MODIFICATION PRINCIPALE : Si aucun profil sélectionné, ouvrir popup directement
+        if (!window.profileManager || !window.profileManager.selectedProfile) {
+            console.log('Aucun profil sélectionné, ouverture de la popup OCR');
+            return false; // Indique qu'il faut ouvrir la popup
+        }
+
+        const profileName = window.profileManager.selectedProfile;
+        console.log(`Profil sélectionné détecté: ${profileName}`);
+
+        try {
+            // Récupérer la configuration du profil
+            const config = await this.getSelectedProfileOcrConfig();
+            
+            // ✅ MODIFICATION PRINCIPALE : Vérifier si ocrMode est activé dans le profil
+            if (!config.ocrMode || config.ocrMode === false || config.ocrMode === 'false') {
+                console.log('OCR désactivé dans le profil, ouverture de la popup pour configuration manuelle');
+                return false; // Ouvrir la popup pour permettre la saisie manuelle
+            }
+
+            console.log(`OCR activé dans le profil, exécution directe`);
+
+            // Afficher le message de traitement
+            const importZone = document.getElementById("importZone");
+            if (importZone) {
+                importZone.innerHTML = `<p>🔄 Traitement OCR automatique avec le profil "${profileName}"...</p>`;
+            }
+            
+            // Créer FormData à partir de la configuration
+            const formData = this.createOcrFormDataFromConfig(config);
+            
+            // Exécuter le traitement OCR
+            await this.executeOcrRequest(formData);
+            
+            return true; // Indique que l'exécution directe a eu lieu
+            
+        } catch (error) {
+            console.error('Erreur lors de l\'exécution automatique OCR:', error);
+            this.showProcessingError("OCR automatique", error.message);
+            return true; // Même en cas d'erreur, pas besoin d'ouvrir la popup
+        }
+    }
+
+    // ✅ MÉTHODE MODIFIÉE : Vérifier si Patch est activé et exécuter ou ouvrir popup
+    async checkProfileAndExecutePatch() {
+        // Vérifier qu'un fichier est importé
+        if (!this.importedFile) {
+            this.showNotification("Veuillez importer un fichier avant de traiter les patches.", 'warning');
+            return false;
+        }
+
+        // ✅ MODIFICATION PRINCIPALE : Si aucun profil sélectionné, ouvrir popup directement
+        if (!window.profileManager || !window.profileManager.selectedProfile) {
+            console.log('Aucun profil sélectionné, ouverture de la popup Patch');
+            return false; // Indique qu'il faut ouvrir la popup
+        }
+
+        const profileName = window.profileManager.selectedProfile;
+        console.log(`Profil sélectionné détecté: ${profileName}`);
+
+        try {
+            // Récupérer la configuration du profil
+            const config = await this.getSelectedProfileOcrConfig();
+            
+            // ✅ MODIFICATION PRINCIPALE : Vérifier si patchEnabled est activé dans le profil
+            if (!config.patchEnabled || config.patchEnabled === false || config.patchEnabled === 'false') {
+                console.log('Patch désactivé dans le profil, ouverture de la popup pour configuration manuelle');
+                return false; // Ouvrir la popup pour permettre la saisie manuelle
+            }
+
+            console.log(`Patch activé dans le profil, exécution directe`);
+
+            // Afficher le message de traitement
+            const importZone = document.getElementById("importZone");
+            if (importZone) {
+                importZone.innerHTML = `<p>🔄 Traitement Patch automatique avec le profil "${profileName}"...</p>`;
+            }
+            
+            // Créer FormData à partir de la configuration
+            const formData = this.createPatchFormDataFromConfig(config);
+            
+            // Exécuter le traitement Patch
+            await this.executePatchRequest(formData);
+            
+            return true; // Indique que l'exécution directe a eu lieu
+            
+        } catch (error) {
+            console.error('Erreur lors de l\'exécution automatique Patch:', error);
+            this.showProcessingError("Patch automatique", error.message);
+            return true; // Même en cas d'erreur, pas besoin d'ouvrir la popup
+        }
+    }
+
+    // ✅ MÉTHODE : Créer FormData à partir de la configuration du profil
     createOcrFormDataFromConfig(config) {
         const formData = new FormData();
         
@@ -332,7 +434,7 @@ class OCRManager {
         return formData;
     }
 
-    // ✅ MÉTHODE MISE À JOUR : Créer FormData Patch à partir de la configuration du profil avec patchMode
+    // ✅ MÉTHODE : Créer FormData Patch à partir de la configuration du profil avec patchMode
     createPatchFormDataFromConfig(config) {
         const formData = new FormData();
         
@@ -344,98 +446,16 @@ class OCRManager {
         formData.append("patchMode", config.patchMode || 'T_classique');
         formData.append("naming", config.patchNaming || 'barcode_ocr_generic');
         formData.append("namingPattern", config.namingPattern || '$(DD)-$(MM)-$(YYYY)-$(n)');
-        formData.append("ocrMode", config.patchEnabled ? "true" : "false");
+        
+        // ✅ CORRECTION : Forcer ocrMode à false pour traitement patch uniquement
+        formData.append("ocrMode", "false"); 
         
         // Paramètres additionnels
         formData.append("splitByBarcode", config.splitByBarcode || 'false');
         formData.append("outputFormat", config.outputFormat || 'pdf');
         
-        console.log('FormData Patch créé à partir de la configuration avec patchMode:', config.patchMode);
+        console.log('FormData Patch créé SANS OCR - patchMode:', config.patchMode);
         return formData;
-    }
-
-    // ✅ MÉTHODE MODIFIÉE : Vérifier si un profil est sélectionné et exécuter directement
-    async checkProfileAndExecuteOcr() {
-        // Vérifier qu'un fichier est importé
-        if (!this.importedFile) {
-            this.showNotification("Veuillez importer un fichier avant de lancer l'OCR.", 'warning');
-            return false;
-        }
-
-        // Vérifier qu'un profil est sélectionné
-        if (!window.profileManager || !window.profileManager.selectedProfile) {
-            console.log('Aucun profil sélectionné, ouverture de la popup');
-            return false; // Indique qu'il faut ouvrir la popup
-        }
-
-        const profileName = window.profileManager.selectedProfile;
-        console.log(`Profil sélectionné détecté: ${profileName}, exécution directe de l'OCR`);
-
-        try {
-            // Afficher le message de traitement
-            const importZone = document.getElementById("importZone");
-            if (importZone) {
-                importZone.innerHTML = `<p>🔄 Traitement OCR automatique avec le profil "${profileName}"...</p>`;
-            }
-
-            // Récupérer la configuration du profil
-            const config = await this.getSelectedProfileOcrConfig();
-            
-            // Créer FormData à partir de la configuration
-            const formData = this.createOcrFormDataFromConfig(config);
-            
-            // Exécuter le traitement OCR
-            await this.executeOcrRequest(formData);
-            
-            return true; // Indique que l'exécution directe a eu lieu
-            
-        } catch (error) {
-            console.error('Erreur lors de l\'exécution automatique OCR:', error);
-            this.showProcessingError("OCR automatique", error.message);
-            return true; // Même en cas d'erreur, pas besoin d'ouvrir la popup
-        }
-    }
-
-    // ✅ MÉTHODE MODIFIÉE : Vérifier si un profil est sélectionné et exécuter directement Patch
-    async checkProfileAndExecutePatch() {
-        // Vérifier qu'un fichier est importé
-        if (!this.importedFile) {
-            this.showNotification("Veuillez importer un fichier avant de traiter les patches.", 'warning');
-            return false;
-        }
-
-        // Vérifier qu'un profil est sélectionné
-        if (!window.profileManager || !window.profileManager.selectedProfile) {
-            console.log('Aucun profil sélectionné, ouverture de la popup');
-            return false; // Indique qu'il faut ouvrir la popup
-        }
-
-        const profileName = window.profileManager.selectedProfile;
-        console.log(`Profil sélectionné détecté: ${profileName}, exécution directe du traitement Patch`);
-
-        try {
-            // Afficher le message de traitement
-            const importZone = document.getElementById("importZone");
-            if (importZone) {
-                importZone.innerHTML = `<p>🔄 Traitement Patch automatique avec le profil "${profileName}"...</p>`;
-            }
-
-            // Récupérer la configuration du profil
-            const config = await this.getSelectedProfileOcrConfig();
-            
-            // Créer FormData à partir de la configuration
-            const formData = this.createPatchFormDataFromConfig(config);
-            
-            // Exécuter le traitement Patch
-            await this.executePatchRequest(formData);
-            
-            return true; // Indique que l'exécution directe a eu lieu
-            
-        } catch (error) {
-            console.error('Erreur lors de l\'exécution automatique Patch:', error);
-            this.showProcessingError("Patch automatique", error.message);
-            return true; // Même en cas d'erreur, pas besoin d'ouvrir la popup
-        }
     }
 
     // =================== TRAITEMENT OCR MODIFIÉ ===================
@@ -1037,52 +1057,83 @@ class OCRManager {
     }
 
     async scanWithProfile(profileName) {
-        const btnScan = document.getElementById("btnScan");
+    const btnScan = document.getElementById("btnScan");
+    
+    if (btnScan) {
+        btnScan.disabled = true;
+        btnScan.textContent = "📄 Scan en cours...";
+    }
+    
+    try {
+        const formData = new FormData();
+        formData.append("scan", "true");
+        formData.append("profileName", profileName);
+        formData.append("ocrMode", "false"); // Scan seul par défaut
         
-        if (btnScan) {
-            btnScan.disabled = true;
-            btnScan.textContent = "📄 Scan en cours...";
+        const response = await fetch(this.getOCREndpoint(), {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Erreur serveur: ${response.status}`);
         }
+
+        const contentType = response.headers.get("content-type");
         
-        try {
-            const formData = new FormData();
-            formData.append("scan", "true");
-            formData.append("profileName", profileName);
-            formData.append("ocrMode", "false"); // Scan seul par défaut
+        if (contentType && contentType.includes("application/json")) {
+            const data = await response.json();
+            if (!data.success && data.error) {
+                throw new Error(data.error);
+            }
+            this.showNotification("Scan terminé avec succès !", 'success');
+        } else {
+            // MODIFICATION ICI : Traiter le fichier scanné comme un fichier importé
+            const blob = await response.blob();
             
-            const response = await fetch(this.getOCREndpoint(), {
-                method: 'POST',
-                body: formData
-            });
+            // Extraire le nom du fichier depuis les headers
+            const contentDisposition = response.headers.get('content-disposition');
+            let fileName = 'document_scanne.pdf';
+            if (contentDisposition && contentDisposition.includes('filename=')) {
+                fileName = contentDisposition.split('filename=')[1].replace(/"/g, '');
+            }
             
-            if (!response.ok) {
-                throw new Error(`Erreur serveur: ${response.status}`);
+            // Créer un objet File à partir du blob
+            this.importedFile = new File([blob], fileName, { type: blob.type });
+            
+            // Mettre à jour l'interface comme pour un fichier importé
+            const importedFileName = document.getElementById("importedFileName");
+            const btnOCR = document.getElementById("btnOCR");
+            const btnPatch = document.getElementById("btnPatch");
+            
+            if (importedFileName) {
+                importedFileName.innerText = `Fichier scanné : ${fileName}`;
+            }
+            
+            if (btnOCR) {
+                btnOCR.disabled = false;
             }
 
-            const contentType = response.headers.get("content-type");
-            
-            if (contentType && contentType.includes("application/json")) {
-                const data = await response.json();
-                if (!data.success && data.error) {
-                    throw new Error(data.error);
-                }
-                this.showNotification("Scan terminé avec succès !", 'success');
-            } else {
-                await this.handleSingleFile(response);
-                this.showNotification("Scan terminé et fichier disponible !", 'success');
+            if (btnPatch) {
+                btnPatch.disabled = false;
             }
 
-        } catch (err) {
-            console.error("Erreur scan:", err);
-            this.showNotification("Erreur scan : " + err.message, 'error');
-        } finally {
-            if (btnScan) {
-                btnScan.disabled = false;
-                btnScan.textContent = "📄 Scanner";
-            }
+            // Créer la preview du fichier scanné dans la zone d'importation
+            this.createFilePreview(this.importedFile);
+            
+            this.showNotification("Fichier scanné avec succès et prêt pour traitement OCR/Patch !", 'success');
+        }
+
+    } catch (err) {
+        console.error("Erreur scan:", err);
+        this.showNotification("Erreur scan : " + err.message, 'error');
+    } finally {
+        if (btnScan) {
+            btnScan.disabled = false;
+            btnScan.textContent = "📄 Scanner";
         }
     }
-
+}
     // =================== GESTION DES FICHIERS IMPORTÉS ===================
     async loadImportedFiles() {
         const importedFilesList = document.getElementById("importedFilesList");
